@@ -214,8 +214,8 @@ class AgenticPlanner:
     MAX_REPLANS = 2     # max times to replan after denial
 
     def __init__(self):
-        from app.services.gemini_planner import GeminiPlanner
-        self._llm = GeminiPlanner()
+        from app.services.llm_factory import get_planner
+        self._llm = get_planner()
         self.memory = AgentMemory()
 
     def _build_system_prompt(

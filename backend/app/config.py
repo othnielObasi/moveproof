@@ -84,10 +84,26 @@ class Settings(BaseSettings):
     gemini_enabled: bool = False
 
     # ------------------------------------------------------------
+    # NVIDIA Nemotron on Nebius Token Factory (OpenAI-compatible)
+    # ------------------------------------------------------------
+    # When configured, Nemotron replaces Gemini as the planner everywhere.
+    # Tiered routing: fast models handle per-step proposals and analysis;
+    # the reasoning model handles mission planning and replanning after a
+    # governance denial. Model IDs are configurable because Token Factory's
+    # catalogue changes — run scripts/check_token_factory.py to list yours.
+    nebius_api_key: Optional[str] = None
+    nebius_base_url: str = "https://api.tokenfactory.nebius.com/v1"
+    nemotron_enabled: bool = True
+    nemotron_fast_models: str = "nvidia/Nemotron-3_5-Lightning,nvidia/nemotron-3-super-120b-a12b"
+    nemotron_reasoning_model: str = "nvidia/Nemotron-3-Ultra-550b-a55b"
+    nemotron_fast_timeout_s: float = 6.0
+    nemotron_reasoning_timeout_s: float = 15.0
+
+    # ------------------------------------------------------------
     # LLM / Agent Configuration
     # ------------------------------------------------------------
     llm_enabled: bool = False
-    llm_provider: str = "gemini"  # gemini | agentic | openai | mock
+    llm_provider: str = "nemotron"  # nemotron | gemini | agentic | mock
     # If true, starting a run will fail unless an LLM multi-waypoint plan is produced
     require_llm_plan_at_start: bool = True
 
@@ -153,6 +169,27 @@ class Settings(BaseSettings):
     @property
     def gemini_configured(self) -> bool:
         return bool(self.gemini_api_key and self.gemini_enabled)
+
+    @property
+    def nemotron_configured(self) -> bool:
+        return bool(self.nebius_api_key and self.nemotron_enabled)
+
+    @property
+    def planner_configured(self) -> bool:
+        """True when any LLM planner backend (Nemotron preferred) is available."""
+        return self.nemotron_configured or self.gemini_configured
+
+    @property
+    def planner_provider(self) -> str:
+        if self.nemotron_configured:
+            return "nemotron"
+        if self.gemini_configured:
+            return "gemini"
+        return "fallback"
+
+    @property
+    def nemotron_fast_models_list(self) -> List[str]:
+        return [m.strip() for m in self.nemotron_fast_models.split(",") if m.strip()]
 
     def validate_runtime(self) -> None:
         """Fail fast on missing critical config in production."""

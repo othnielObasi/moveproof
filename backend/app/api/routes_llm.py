@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.services.gemini_planner import GeminiPlanner, resolve_bay_from_instruction
+from app.services.llm_factory import get_planner
 from app.services.sim_adapter import SimAdapter
 from app.services.governance_engine import GovernanceEngine
 from app.policies.rules_python import evaluate_policies, GEOFENCE
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/llm", tags=["llm"])
 class PlanRequest(BaseModel):
     instruction: str = Field(..., description="Natural-language instruction for the robot")
     goal: Optional[Dict[str, Any]] = Field(None, description="Optional {x, y, zone?} goal coordinate")
-    model: Optional[str] = Field(None, description="Preferred starting model (e.g. gemini-2.0-flash). Falls back through cascade.")
+    model: Optional[str] = Field(None, description="Preferred starting model (e.g. nvidia/nemotron-3-super-120b-a12b). Falls back through cascade.")
 
 
 class ExecuteRequest(BaseModel):
@@ -130,16 +131,41 @@ _planner: Optional[GeminiPlanner] = None
 def _get_planner() -> GeminiPlanner:
     global _planner
     if _planner is None:
-        _planner = GeminiPlanner()
+        _planner = get_planner()
     return _planner
+
+
+@router.get("/usage")
+async def llm_usage(limit: int = 50):
+    """Per-model latency and token usage for Nemotron calls (process-local).
+
+    Powers the 'cost and latency per decision' view: which tier handled the
+    call, p50/p95 latency, and prompt/completion tokens.
+    """
+    from app.services.nemotron_planner import usage_log
+    return {
+        "provider": settings.planner_provider,
+        "summary": usage_log.summary(),
+        "recent": usage_log.recent(limit=max(1, min(limit, 500))),
+    }
 
 
 @router.get("/models")
 async def list_models():
-    """List available Gemini models and the current cascade order."""
+    """List the active planner provider, its model tiers and cascade order."""
     from app.services.gemini_planner import MODEL_CASCADE
     planner = _get_planner()
+    if getattr(planner, "provider", None) == "nemotron":
+        return {
+            "provider": "nemotron",
+            "primary": planner.primary_model,
+            "tiers": {"fast": planner.fast_models, "reasoning": planner.reasoning_model},
+            "cascade": planner.model_cascade,
+            "available": planner.model_cascade,
+            "deterministic_fallback": True,
+        }
     return {
+        "provider": settings.planner_provider,
         "primary": planner.primary_model,
         "cascade": planner.model_cascade,
         "available": MODEL_CASCADE,

@@ -14,7 +14,7 @@ from app.db.models import Run, Event, Mission, TelemetrySample
 from app.schemas.run import RunOut, RunStartResponse
 from app.schemas.events import EventOut
 from app.services.run_service import RunService
-from app.services.gemini_planner import GeminiPlanner
+from app.services.llm_factory import get_planner
 from app.services.local_fallback_planner import generate_fallback_waypoint
 from app.config import settings
 from app.world_model import GEOFENCE
@@ -125,11 +125,11 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
         plan_source = "fallback"
 
         # --- Attempt LLM plan upgrade ---
-        if settings.gemini_configured:
+        if settings.planner_configured:
             if svc._ws_broadcast:
                 await svc._ws_broadcast(run_id, {
                     "kind": "planning_progress",
-                    "data": {"step": "llm_start", "message": "Calling Gemini LLM to generate optimal plan…"},
+                    "data": {"step": "llm_start", "message": f"Calling {settings.planner_provider.title()} to generate optimal plan…"},
                 })
             try:
                 telemetry = {}
@@ -139,13 +139,13 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
                     pass
 
                 async with asyncio.timeout(LLM_PLAN_TIMEOUT):
-                    planner = GeminiPlanner()
+                    planner = get_planner()
                     plan = await planner.generate_plan(telemetry, mission_title, goal)
 
                 if plan and plan.get("waypoints"):
                     async with svc._plans_lock:
                         svc._plans[run_id] = plan["waypoints"]
-                    plan_source = "gemini"
+                    plan_source = settings.planner_provider
                     svc._append_event(db, run_id, "PLAN", {
                         "mission_id": mission_id,
                         "plan": plan,
@@ -157,7 +157,7 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
                     if svc._ws_broadcast:
                         await svc._ws_broadcast(run_id, {
                             "kind": "planning_progress",
-                            "data": {"step": "llm_done", "message": f"LLM plan ready — {len(plan['waypoints'])} waypoints generated", "waypoint_count": len(plan["waypoints"]), "source": "gemini"},
+                            "data": {"step": "llm_done", "message": f"LLM plan ready — {len(plan['waypoints'])} waypoints generated", "waypoint_count": len(plan["waypoints"]), "source": plan_source, "model_used": plan.get("model_used")},
                         })
                 else:
                     if svc._ws_broadcast:
@@ -176,7 +176,7 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
             if svc._ws_broadcast:
                 await svc._ws_broadcast(run_id, {
                     "kind": "planning_progress",
-                    "data": {"step": "llm_skip", "message": "Gemini not configured — using fallback plan", "source": "fallback"},
+                    "data": {"step": "llm_skip", "message": "No LLM planner configured — using fallback plan", "source": "fallback"},
                 })
 
         # --- Mission-level governance gate: Sovereign reviews the plan ---

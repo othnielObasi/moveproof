@@ -43,6 +43,8 @@ async def health():
         "status": "ok" if db_ok and sim_ok else "degraded",
         "environment": settings.environment,
         "gemini_enabled": settings.gemini_configured,
+        "nemotron_enabled": settings.nemotron_configured,
+        "planner_provider": settings.planner_provider,
         "version": "0.1.0",
         "checks": {
             "database": "ok" if db_ok else "error",

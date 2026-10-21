@@ -63,6 +63,7 @@ class AgentRouter:
     """Select between deterministic, LLM, or agentic planner.
 
     Modes (via settings.llm_provider):
+    - "nemotron" → Single-call Nemotron planner on Nebius Token Factory
     - "gemini"   → Single-call GeminiPlanner (fast, stateless)
     - "agentic"  → ReAct agent with tool use, memory, replanning
     - default    → Deterministic SimpleAgent
@@ -76,8 +77,8 @@ class AgentRouter:
 
     def _gemini_planner(self):
         if self._gemini is None:
-            from app.services.gemini_planner import GeminiPlanner
-            self._gemini = GeminiPlanner()
+            from app.services.llm_factory import get_planner
+            self._gemini = get_planner()
         return self._gemini
 
     def _agentic_planner(self):
@@ -140,8 +141,8 @@ class AgentRouter:
                 logger.exception(f"[Agentic] Failed: {e}, falling back to deterministic")
                 return self.simple.propose(telemetry, goal, last_governance)
 
-        # ── Single-call Gemini mode ──
-        if provider == "gemini":
+        # ── Single-call LLM mode (Nemotron preferred, Gemini fallback) ──
+        if provider in ("nemotron", "gemini"):
             try:
                 return await self._gemini_planner().propose(telemetry, goal, nl_task, last_governance)
             except Exception:
