@@ -241,9 +241,17 @@ Output STRICT JSON: {{"intent":"MOVE_TO|STOP|WAIT","params":{{...}},"rationale":
 
     async def generate_plan(self, telemetry: Dict[str, Any], instruction: str,
                             goal: Optional[Dict[str, float]] = None,
-                            preferred_model: Optional[str] = None) -> Dict[str, Any]:
+                            preferred_model: Optional[str] = None,
+                            lessons: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Multi-waypoint plan. `lessons` = advisory context from planner_lessons
+        (learned from past gate decisions); their IDs are returned as lessons_applied."""
+        lesson_ids = [l["id"] for l in (lessons or [])]
         if not self.api_key:
-            return self._deterministic_plan(telemetry, goal)
+            plan = self._deterministic_plan(telemetry, goal)
+            plan["lessons_applied"] = []
+            return plan
+        from app.services.planner_lessons import format_for_prompt
+        lessons_text = format_for_prompt(lessons or [])
 
         goal_text = f"GOAL: {json.dumps(goal)}" if goal else "No specific goal."
         bays_text = bay_directory_text(self._bays) if self._bays else ""
@@ -256,6 +264,8 @@ STATE: {json.dumps(telemetry, indent=2)}
 {goal_text}
 
 {bays_text}
+
+{lessons_text}
 
 IMPORTANT: When the instruction mentions a bay ID (e.g. B-03, S-01, R-02), use the EXACT coordinates from the Bay Directory above. Do NOT guess bay positions.
 
@@ -286,10 +296,13 @@ Output STRICT JSON:
                     "rationale": f"[{model}] {obj.get('rationale', '')}",
                     "estimated_time_s": float(obj.get("estimated_time_s", 0)),
                     "model_used": model,
+                    "lessons_applied": lesson_ids,
                 }
             except Exception as e:
                 logger.warning(f"Plan parse failed {model}: {e}")
-        return self._deterministic_plan(telemetry, goal)
+        plan = self._deterministic_plan(telemetry, goal)
+        plan["lessons_applied"] = []
+        return plan
 
     # ---- Deterministic analysis fallbacks ----
 

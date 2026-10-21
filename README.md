@@ -71,6 +71,24 @@ Model IDs are configurable (`NEMOTRON_FAST_MODELS`, `NEMOTRON_REASONING_MODEL`) 
 
 ---
 
+## How MoveProof learns
+
+The planner learns; the rules do not drift. ([`backend/app/services/planner_lessons.py`](backend/app/services/planner_lessons.py))
+
+1. **Distil.** When any run ends (completed, stopped or failed), the gate's own decision records are folded into location-aware lessons: which policy denied moves, in which 2 m cell and zone, how often, across how many runs, and (for location-bound rules like zone speed limits) the fastest speed the gate approved there.
+2. **Retrieve.** Before a mission plan or a replan, lessons near the route corridor (and near the blocked waypoint on a replan) are handed to Nemotron as advisory context.
+3. **Audit.** Every `PLAN` event records which lesson IDs shaped it, so the effect of learning is traceable in the hash chain.
+
+Safety properties:
+
+- Lessons are written **only from deterministic gate records**, never from model output or web content, so neither a model nor a poisoned page can teach the planner.
+- Lessons only change what the planner **proposes**. The gate evaluates every move exactly as before.
+- Lessons are **scoped to the policy version** they were learned under; when the rules change, old lessons stop being used.
+
+Inspect them: `GET /agent/lessons` and `GET /agent/lessons/route?sx=&sy=&gx=&gy=` (the exact block Nemotron would receive). Changing the rules themselves is a separate, human-approved process tied to the safety benchmark (in progress).
+
+---
+
 ## Built on Sovereign Robotics Ops
 
 MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.com/othnielObasi/sovereign-robotics-ops) (3rd of 94 in an AI robotics challenge; featured on Vultr's booth at NVIDIA GTC 2026). That project proved a governance gate can stop an AI-planned robot move. The full commit history is preserved here.
@@ -80,6 +98,7 @@ MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.
 - [x] Planner moved from Google Gemini to **NVIDIA Nemotron on Nebius Token Factory**, with tiered routing (fast models per step, Ultra for planning and replanning)
 - [x] Per-call latency and token telemetry (`GET /llm/usage`)
 - [x] Rebrand to MoveProof
+- [x] Planner learning loop: lessons distilled from gate decisions feed Nemotron's plans and replans, recorded on each plan
 - [ ] Enhanced warehouse: richer layout, moving workers and forklifts, robot camera view, seeded scenarios
 - [ ] NVIDIA vision model perception, cross-checked by the governance gate against simulator ground truth
 - [ ] Safety benchmark at scale on Nebius Serverless Jobs: unsafe moves proposed vs. unsafe moves executed
@@ -366,7 +385,7 @@ moveproof/
 │   │   │                         #   mission service, Nemotron planner, sim adapter
 │   │   └── utils/                # SHA-256 hashing, ID generation, time
 │   ├── alembic/                  # Database migrations (3 versions)
-│   └── tests/                    # pytest suite (107 tests)
+│   └── tests/                    # pytest suite (116 tests)
 │
 ├── frontend/                     # Operator Dashboard — Next.js 14, React 18, TS
 │   └── src/
@@ -425,7 +444,7 @@ CI/CD is configured in `.github/workflows/` — push to `main` triggers backend 
 ## Testing
 
 ```bash
-# Backend tests (107 tests — governance, API smoke, plan execution, lifecycle, Nemotron routing)
+# Backend tests (116 tests — governance, API smoke, plan execution, lifecycle, Nemotron routing, learning loop)
 cd backend && python -m pytest tests/ -q
 
 # Frontend type-check

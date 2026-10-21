@@ -375,6 +375,41 @@ def get_cross_run_learning(
     return aggregate_cross_run_lessons(db, limit=limit)
 
 
+# ── Planner learning loop: spatial lessons from gate decisions ──
+
+@router.get("/agent/lessons")
+def get_planner_lessons(
+    all_versions: bool = Query(False, description="Include lessons learned under older policy versions"),
+    db: Session = Depends(get_db),
+):
+    """Lessons the planner has learned from the gate's past decisions.
+
+    Only lessons learned under the active policy version are fed to the planner.
+    """
+    from app.policies.versioning import policy_version_hash
+    from app.services.planner_lessons import all_lessons
+
+    lessons = all_lessons(db, current_version_only=not all_versions)
+    return {"policy_version": policy_version_hash(), "count": len(lessons), "lessons": lessons}
+
+
+@router.get("/agent/lessons/route")
+def get_lessons_for_route(
+    sx: float = Query(..., description="Start x (m)"),
+    sy: float = Query(..., description="Start y (m)"),
+    gx: Optional[float] = Query(None, description="Goal x (m)"),
+    gy: Optional[float] = Query(None, description="Goal y (m)"),
+    limit: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db),
+):
+    """Preview the lessons the planner would receive for a route."""
+    from app.services.planner_lessons import format_for_prompt, lessons_for_route
+
+    goal = {"x": gx, "y": gy} if gx is not None and gy is not None else None
+    lessons = lessons_for_route(db, {"x": sx, "y": sy}, goal, limit=limit)
+    return {"lessons": lessons, "prompt_block": format_for_prompt(lessons)}
+
+
 # ── Score trends across runs (#10) ──
 
 @router.get("/analytics/score-trends")

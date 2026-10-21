@@ -138,9 +138,17 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
                 except Exception:
                     pass
 
+                # Learning loop: lessons from past gate decisions near this route
+                lessons = []
+                try:
+                    from app.services.planner_lessons import lessons_for_route
+                    lessons = lessons_for_route(db, telemetry or {}, goal)
+                except Exception as les_err:
+                    logger.warning("Lesson retrieval failed for run %s: %s", run_id, les_err)
+
                 async with asyncio.timeout(LLM_PLAN_TIMEOUT):
                     planner = get_planner()
-                    plan = await planner.generate_plan(telemetry, mission_title, goal)
+                    plan = await planner.generate_plan(telemetry, mission_title, goal, lessons=lessons)
 
                 if plan and plan.get("waypoints"):
                     async with svc._plans_lock:
@@ -151,6 +159,8 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
                         "plan": plan,
                         "source": plan_source,
                         "note": "LLM multi-waypoint plan (upgraded from fallback)",
+                        "lessons_applied": [{"id": l["id"], "text": l["text"]} for l in lessons
+                                            if l["id"] in plan.get("lessons_applied", [])],
                     })
                     db.commit()
                     logger.info("LLM plan ready for run %s (%d waypoints)", run_id, len(plan["waypoints"]))

@@ -733,13 +733,35 @@ class RunService:
                                     f"{nl_task}. Previous waypoint at ({blocked_wp.get('x')},{blocked_wp.get('y')}) "
                                     f"was blocked: {denial_context}. Plan an alternative route avoiding that area."
                                 )
+                                lessons = []
+                                try:
+                                    from app.services.planner_lessons import lessons_for_route
+                                    lessons = lessons_for_route(db, telemetry, goal, avoid=blocked_wp)
+                                except Exception as les_err:
+                                    logger.warning("Run %s: lesson retrieval failed: %s", run_id, les_err)
                                 planner = self.agent._gemini_planner()
-                                new_plan = await planner.generate_plan(telemetry, replan_instruction, goal)
+                                new_plan = await planner.generate_plan(telemetry, replan_instruction, goal, lessons=lessons)
                                 new_wps = new_plan.get("waypoints", [])
                                 if new_wps:
                                     async with self._plans_lock:
                                         self._plans[run_id] = new_wps
                                     replan_payload["new_plan_waypoints"] = len(new_wps)
+                                    # The REPLAN event above is already hashed into the chain, so the
+                                    # new plan (and the lessons that shaped it) is recorded as its own
+                                    # PLAN event — auditable, and what the run view draws on the map.
+                                    from app.config import settings as _settings
+                                    applied = [
+                                        {"id": l["id"], "text": l["text"]} for l in lessons
+                                        if l["id"] in new_plan.get("lessons_applied", [])
+                                    ]
+                                    self._append_event(db, run_id, "PLAN", {
+                                        "plan": new_plan,
+                                        "source": "fallback" if new_plan.get("model_used") == "deterministic_fallback"
+                                                  else _settings.planner_provider,
+                                        "note": "Replan after governance denial",
+                                        "blocked_waypoint": blocked_wp,
+                                        "lessons_applied": applied,
+                                    })
                                     logger.info("Run %s: replanned with %d new waypoints", run_id, len(new_wps))
                             except Exception as replan_err:
                                 logger.warning("Run %s: replan LLM call failed: %s", run_id, replan_err)
@@ -921,6 +943,21 @@ class RunService:
                 await self._ws_broadcast(run_id, {"kind": "status", "data": {"status": "failed"}})
 
         logger.info("Run loop ended: %s", run_id)
+
+        # Planner learning loop: distil location-aware lessons from the gate's
+        # decisions for every run ending (completed, stopped or failed — denials
+        # in an aborted run are often the most instructive). Idempotent per run.
+        try:
+            from app.db.session import SessionLocal
+            from app.services.planner_lessons import distill_run
+            ldb = SessionLocal()
+            try:
+                distill_run(ldb, run_id)
+            finally:
+                ldb.close()
+        except Exception as dl_err:
+            logger.warning("Lesson distillation failed for %s: %s", run_id, dl_err)
+
         # Cleanup finished task references
         self._tasks.pop(run_id, None)
         self._stop_flags.pop(run_id, None)
