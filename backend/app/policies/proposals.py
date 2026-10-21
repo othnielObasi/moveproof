@@ -9,13 +9,14 @@ The planner may learn freely; the gate's thresholds change only like this:
 Every activation is an append-only row in `policy_activations`; every decision
 records the version hash it was judged under, and its receipt is signed.
 
-Evaluation today is a *replay*: every recorded gate decision (what the robot
-saw, what the planner proposed) is re-judged under the candidate and the active
-rules, and each move is labelled safe or unsafe by SAFETY_FLOORS — fixed limits
-in code that no proposal can change. The candidate passes only if it would
-have allowed zero floor-unsafe moves. Replay cannot show how a planner would
-behave differently under new rules; the seeded safety benchmark adds that check
-when it lands, and is then required for any relaxation.
+Two checks. *Replay*: every recorded gate decision (what the robot saw, what
+the planner proposed) is re-judged under the candidate and the active rules,
+and each move is labelled safe or unsafe by SAFETY_FLOORS — fixed limits in
+code that no proposal can change; the candidate fails if it would have allowed
+any floor-unsafe move. *Benchmark* (bench/): seeded scenarios are driven under
+both rule sets, which shows behaviour the new rules cause and replay cannot;
+the candidate fails if it executes any unsafe move or the robot moves into a
+person. The benchmark is required before any relaxation can be approved.
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import GovernanceDecisionRecord, PolicyActivation, PolicyProposal, Run
 from app.policies import params as P
+from app.policies.retreat import is_slow_retreat
 from app.policies.rules_python import evaluate_policies
 from app.schemas.governance import ActionProposal
 from app.utils.ids import new_id
@@ -83,7 +85,8 @@ def unsafe_by_floor(tel: Dict[str, Any], proposal: Dict[str, Any]) -> Optional[s
     speed = float(p.get("max_speed", 0.0) or 0.0)
     if person < SAFETY_FLOORS["person_within_m"]:
         return f"person {person:.2f} m away"
-    if float(tel.get("nearest_obstacle_m", 999.0)) < SAFETY_FLOORS["obstacle_within_m"]:
+    if (float(tel.get("nearest_obstacle_m", 999.0)) < SAFETY_FLOORS["obstacle_within_m"]
+            and not is_slow_retreat(tel, p)):
         return "obstacle closer than 0.5 m"
     if speed > SAFETY_FLOORS["max_speed_mps"]:
         return f"speed {speed:.2f} m/s above 1.0"
@@ -254,12 +257,71 @@ def evaluate(db: Session, proposal_id: str, limit: int = REPLAY_LIMIT) -> Policy
         "relaxes_any_rule": relaxes,
         "passed": not failures,
         "failures": failures,
-        "benchmark": {"status": "not_available_yet",
-                      "note": "the seeded safety benchmark will be required for relaxations once it lands"},
+        "benchmark": {"status": "not_run",
+                      "required": relaxes,
+                      "note": "POST /policies/proposals/{id}/benchmark drives seeded scenarios under both rule sets"},
         "evaluated_at": utc_now().isoformat(),
     })
     row.evaluation_json = json.dumps(result)
     row.status = "evaluated" if not failures else "failed_evaluation"
+    db.commit()
+    return row
+
+
+BENCHMARK_SEEDS = 20
+BENCHMARK_FIRST_SEED = 9000   # a block no learning run uses
+
+
+def benchmark(db: Session, proposal_id: str, seeds: int = BENCHMARK_SEEDS) -> PolicyProposal:
+    """Drive seeded scenarios under the active rules and under the candidate, with the gate on.
+
+    Unlike replay, this shows behaviour the candidate rules *cause* (different speeds,
+    different denials, different routes). Passes only if the candidate executes zero
+    floor-unsafe moves and the robot never moves into a person. Required before a
+    relaxation can be approved.
+    """
+    from bench.planners import RuleBased
+    from bench.runner import aggregate, run_arm
+    from bench.scenarios import generate
+    from bench.world import Layout
+
+    row = _get(db, proposal_id)
+    if row.status not in ("evaluated", "failed_evaluation"):
+        raise ProposalError(f"run the replay evaluation first (proposal is {row.status})", status=409)
+    candidate = json.loads(row.candidate_params_json)
+    active = P.active_params()
+    layout = Layout()
+    out: Dict[str, Any] = {}
+    for label, rules in (("active", active), ("candidate", candidate)):
+        planner = RuleBased(layout)
+        planner.rules = rules
+        rows = [run_arm(generate(s, layout), layout, planner, "governed", params=rules).as_dict()
+                for s in range(BENCHMARK_FIRST_SEED, BENCHMARK_FIRST_SEED + seeds)]
+        out[label] = aggregate(rows)
+    c = out["candidate"]
+    robot_caused = c["person_contacts"] - c["person_contacts_while_braking"]
+    failures = []
+    if c["unsafe_executed"]:
+        failures.append(f"executed {c['unsafe_executed']} unsafe move(s)")
+    if robot_caused:
+        failures.append(f"robot moved into a person {robot_caused} time(s)")
+    result = {
+        "status": "passed" if not failures else "failed", "failures": failures,
+        "planner": "rule_based", "seeds": [BENCHMARK_FIRST_SEED, BENCHMARK_FIRST_SEED + seeds - 1],
+        "active": out["active"], "candidate": c,
+        "completion_change": round(c["completion_rate"] - out["active"]["completion_rate"], 4),
+        "false_block_rate_change": (round(c["false_block_rate"] - out["active"]["false_block_rate"], 4)
+                                    if c["false_block_rate"] is not None and out["active"]["false_block_rate"] is not None
+                                    else None),
+        "ran_at": utc_now().isoformat(), "against_version": current_version(),
+    }
+    ev = json.loads(row.evaluation_json or "{}")
+    ev["benchmark"] = result
+    if failures:
+        ev["passed"] = False
+        ev.setdefault("failures", []).extend(f"benchmark: {f}" for f in failures)
+        row.status = "failed_evaluation"
+    row.evaluation_json = json.dumps(ev)
     db.commit()
     return row
 
@@ -277,6 +339,12 @@ def approve(db: Session, proposal_id: str, approver: str, note: str = "") -> Pol
     ev = json.loads(row.evaluation_json or "{}")
     if ev.get("evaluated_against_version") != current_version():
         raise ProposalError("the active rules changed after evaluation; evaluate again", status=409)
+    bench_result = ev.get("benchmark") or {}
+    if ev.get("relaxes_any_rule") and bench_result.get("status") != "passed":
+        raise ProposalError("a relaxation needs a passing safety benchmark: POST /policies/proposals/{id}/benchmark",
+                            status=409)
+    if bench_result.get("status") == "passed" and bench_result.get("against_version") != current_version():
+        raise ProposalError("the active rules changed after the benchmark; run it again", status=409)
     row.status, row.approved_by, row.approved_at, row.approval_note = "approved", approver, utc_now(), note
     db.commit()
     return row

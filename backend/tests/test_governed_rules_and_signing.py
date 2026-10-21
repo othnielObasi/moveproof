@@ -147,7 +147,7 @@ def test_safe_relaxation_passes_replay_and_reports_impact(clean):
     assert ev["candidate"]["unsafe_allowed"] == 0
     assert ev["newly_allowed"] >= 15                      # the seeded 0.45 m/s moves near a person
     assert ev["candidate"]["false_block_rate"] < ev["active"]["false_block_rate"]
-    assert ev["benchmark"]["status"] == "not_available_yet"
+    assert ev["benchmark"]["status"] == "not_run" and ev["benchmark"]["required"] is True
 
 
 def test_replay_blocks_a_change_that_would_allow_unsafe_moves(clean, monkeypatch):

@@ -10,8 +10,8 @@ from app.schemas.governance import ActionProposal, GovernanceDecision
 from app.policies.rules_python import evaluate_policies
 from app.db.models import GovernanceDecisionRecord, CircuitBreakerState
 from app.utils.time import utc_now
-from app.policies.versioning import policy_version_hash
 from app.policies.params import active_params, params_hash
+from app.policies.versioning import policy_version_hash  # noqa: F401  (re-exported; tests and callers use it)
 from app.utils import signing
 
 logger = logging.getLogger("app.governance")
@@ -62,6 +62,9 @@ class GovernanceEngine:
                 last_updated=utc_now(),
             )
             db.add(row)
+            # SessionLocal does not autoflush: without this, a second decision for the same
+            # run before the next commit inserts a duplicate row and fails the unique index.
+            db.flush()
 
     def evaluate(self, telemetry: Dict[str, Any], proposal: ActionProposal) -> GovernanceDecision:
         """Evaluate a proposal against policies. Stateless — does not persist."""
@@ -75,10 +78,14 @@ class GovernanceEngine:
         proposal: ActionProposal,
         was_executed: bool = False,
         event_hash: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> GovernanceDecision:
-        """Evaluate a proposal, persist the decision, and handle escalation logic."""
+        """Evaluate a proposal, persist the decision, and handle escalation logic.
+
+        `params` overrides the active rules (used by the benchmark to test a candidate
+        rule set); live runs always use the active rules."""
         # Pin the rules for this decision so the recorded version is exactly what was enforced
-        params = active_params()
+        params = params if params is not None else active_params()
         decision = evaluate_policies(telemetry, proposal, params)
 
         # Circuit-breaker: track consecutive denials (persistent)

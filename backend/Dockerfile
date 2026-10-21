@@ -20,6 +20,7 @@ COPY pyproject.toml /app/pyproject.toml
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
 COPY app /app/app
+COPY bench /app/bench
 RUN mkdir -p /app/data && chown -R moveproof:moveproof /app/data
 
 USER moveproof

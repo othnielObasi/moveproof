@@ -92,7 +92,8 @@ Inspect them: `GET /agent/lessons` and `GET /agent/lessons/route?sx=&sy=&gx=&gy=
 The gate's thresholds change only through this workflow ([`backend/app/policies/proposals.py`](backend/app/policies/proposals.py)):
 
 1. **Propose** a change to a named threshold (`POST /policies/proposals`, or `/policies/proposals/from-tuning` to turn tuning recommendations into one). Hard bounds in code refuse anything outside safe limits.
-2. **Evaluate** by replay (`/evaluate`): every recorded gate decision is re-judged under the candidate and the active rules, and each move is labelled safe or unsafe by fixed safety floors no proposal can change. The candidate fails if it would have allowed a single unsafe move; a relaxation also needs at least 50 recorded decisions. The seeded safety benchmark joins this gate when it lands.
+2. **Evaluate** by replay (`/evaluate`): every recorded gate decision is re-judged under the candidate and the active rules, and each move is labelled safe or unsafe by fixed safety floors no proposal can change. The candidate fails if it would have allowed a single unsafe move; a relaxation also needs at least 50 recorded decisions.
+   **Benchmark** (`/benchmark`): seeded scenarios are driven under both rule sets, showing behaviour the new rules cause. Required before any relaxation can be approved; fails on any unsafe move executed or the robot moving into a person.
 3. **Approve** (`/approve`): a named person who is not the proposer.
 4. **Activate** (`/activate`): only between runs, and only if the rules haven't changed since the proposal. Every activation is an append-only record; every decision stores the version it was judged under.
 5. **Roll back** at any time (`POST /policies/rollback`).
@@ -117,6 +118,8 @@ MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.
 - [x] Planner learning loop: lessons distilled from gate decisions feed Nemotron's plans and replans, recorded on each plan
 - [x] Governed rule changes: propose, replay gate, separate approver, versioned activation, rollback
 - [x] Ed25519-signed governance receipts with a verification endpoint
+- [x] Safety benchmark: deterministic seeded warehouse, three arms (no gate / gate / gate + learning), physical contact metrics, report and chart ([`backend/bench`](backend/bench))
+- [x] Gate fix found by the benchmark: a robot too close to an obstacle can now back away slowly (it previously deadlocked)
 - [ ] Enhanced warehouse: richer layout, moving workers and forklifts, robot camera view, seeded scenarios
 - [ ] NVIDIA vision model perception, cross-checked by the governance gate against simulator ground truth
 - [ ] Safety benchmark at scale on Nebius Serverless Jobs: unsafe moves proposed vs. unsafe moves executed

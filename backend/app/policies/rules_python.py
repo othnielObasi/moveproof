@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any, Tuple, List
 from app.schemas.governance import GovernanceDecision, ActionProposal
 from app.policies.params import DEFAULT_PARAMS, active_params
+from app.policies.retreat import is_slow_retreat
 
 
 # --- Policy parameters ---
@@ -115,7 +116,8 @@ def evaluate_policies(
             policy_state = "STOP"
 
     # --- OBSTACLE_CLEARANCE_03 ---
-    if intent == "MOVE_TO" and nearest_obstacle_m < MIN_OBSTACLE_CLEARANCE_M:
+    if (intent == "MOVE_TO" and nearest_obstacle_m < MIN_OBSTACLE_CLEARANCE_M
+            and not is_slow_retreat(telemetry, params)):
         policy_hits.append("OBSTACLE_CLEARANCE_03")
         reasons.append(f"Obstacle clearance too low: {nearest_obstacle_m:.2f}m < {MIN_OBSTACLE_CLEARANCE_M:.2f}m.")
         required_action = "Stop and replan with safer clearance."

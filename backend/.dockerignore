@@ -10,3 +10,4 @@ __pycache__
 moveproof_backend.egg-info
 data/
 tests/
+bench/results/

@@ -112,6 +112,16 @@ def evaluate_proposal(proposal_id: str, body: EvaluateBody = EvaluateBody(), db:
     return svc.to_dict(_call(svc.evaluate, db, proposal_id, body.limit))
 
 
+class BenchmarkBody(BaseModel):
+    seeds: int = Field(svc.BENCHMARK_SEEDS, ge=5, le=200)
+
+
+@router.post("/proposals/{proposal_id}/benchmark")
+def benchmark_proposal(proposal_id: str, body: BenchmarkBody = BenchmarkBody(), db: Session = Depends(get_db)):
+    """Drive seeded scenarios under the active and candidate rules (takes ~1 s per scenario)."""
+    return svc.to_dict(_call(svc.benchmark, db, proposal_id, body.seeds))
+
+
 @router.post("/proposals/{proposal_id}/approve")
 def approve_proposal(proposal_id: str, body: ApproveBody, db: Session = Depends(get_db),
                      user: Optional[str] = Depends(get_current_user)):
