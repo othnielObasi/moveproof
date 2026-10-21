@@ -1,4 +1,4 @@
-app = "sovereign-robotics-ops"
+app = "moveproof"
 primary_region = "lhr"
 
 [build]

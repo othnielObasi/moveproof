@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Map2D } from '@/components/Map2D'
 
-// Simulated API responses (same format Gemini will send)
+// Simulated API responses (same format the Nemotron planner sends)
 const generateApiResponse = (scenario, robotPos, waypointIndex) => ({
   timestamp: new Date().toISOString(),
   run_id: 'run-demo-001',
@@ -20,7 +20,7 @@ const scenarios = [
   { name: 'Path Blocked', status: 'REPLAN', risk: 0.45, humans: [], obstacles: [{ x: 50, y: 50 }], description: 'Following alternate route', path: [{ x: 25, y: 50 }, { x: 32, y: 32 }, { x: 50, y: 20 }, { x: 68, y: 32 }, { x: 75, y: 50 }] }
 ]
 
-export default function SovereignDashboard() {
+export default function MoveProofDashboard() {
   const [wsConnected, setWsConnected] = useState(false)
   const [wsConnecting, setWsConnecting] = useState(true)
   const [messagesPerSec, setMessagesPerSec] = useState(0)

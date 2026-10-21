@@ -1,16 +1,16 @@
 # Vultr Custom Domain Deployment Guide
 
-Complete guide for deploying Sovereign Robotics Ops on Vultr VM with a custom domain, HTTPS, and Nginx reverse proxy. Includes all issues encountered and solutions — intended as future deployment reference.
+Complete guide for deploying MoveProof on Vultr VM with a custom domain, HTTPS, and Nginx reverse proxy. Includes all issues encountered and solutions — intended as future deployment reference.
 
 ## Overview
 
 | Component | Before (raw IP) | After (custom domain) |
 |-----------|-----------------|----------------------|
-| Frontend | `http://104.238.128.128` | `https://sovereignroboticsops.nov-tia.com` |
-| Backend API | `http://104.238.128.128:8080/runs` | `https://sovereignroboticsops.nov-tia.com/api/runs` |
-| API Docs | `http://104.238.128.128:8080/docs` | `https://sovereignroboticsops.nov-tia.com/docs` |
-| Health | `http://104.238.128.128:8080/health` | `https://sovereignroboticsops.nov-tia.com/health` |
-| WebSocket | `ws://104.238.128.128:8080/ws/runs/{id}` | `wss://sovereignroboticsops.nov-tia.com/ws/runs/{id}` |
+| Frontend | `http://104.238.128.128` | `https://moveproof.nov-tia.com` |
+| Backend API | `http://104.238.128.128:8080/runs` | `https://moveproof.nov-tia.com/api/runs` |
+| API Docs | `http://104.238.128.128:8080/docs` | `https://moveproof.nov-tia.com/docs` |
+| Health | `http://104.238.128.128:8080/health` | `https://moveproof.nov-tia.com/health` |
+| WebSocket | `ws://104.238.128.128:8080/ws/runs/{id}` | `wss://moveproof.nov-tia.com/ws/runs/{id}` |
 | SSL | None | Let's Encrypt (auto-renewed via Certbot) |
 
 **Key design:** Frontend API calls use the `/api` prefix (e.g., `/api/runs`, `/api/missions`). Nginx strips `/api` and forwards to the backend. This avoids routing conflicts where frontend pages and backend endpoints use the same path (e.g., `/runs`).
@@ -20,7 +20,7 @@ Complete guide for deploying Sovereign Robotics Ops on Vultr VM with a custom do
 ## Architecture
 
 ```
-Browser → https://sovereignroboticsops.nov-tia.com
+Browser → https://moveproof.nov-tia.com
            │
            ▼
      ┌─── Nginx (port 443, SSL termination) ──────────────┐
@@ -58,14 +58,14 @@ Domain `nov-tia.com` uses **Netlify DNS** (nameservers: `dns1.p09.nsone.net` thr
 | Field | Value |
 |-------|-------|
 | Type | **A** |
-| Name | `sovereignroboticsops` |
+| Name | `moveproof` |
 | Value | `104.238.128.128` |
 | TTL | `3600` |
 
 3. Verify propagation (may take a few minutes):
 
 ```bash
-curl -s "https://dns.google/resolve?name=sovereignroboticsops.nov-tia.com&type=A" | python3 -m json.tool
+curl -s "https://dns.google/resolve?name=moveproof.nov-tia.com&type=A" | python3 -m json.tool
 ```
 
 Expected: `"data": "104.238.128.128"` in the Answer section.
@@ -78,12 +78,12 @@ Expected: `"data": "104.238.128.128"` in the Answer section.
 
 **CORS origins** — changed from raw IP to domain:
 ```yaml
-CORS_ORIGINS: "https://sovereignroboticsops.nov-tia.com,http://sovereignroboticsops.nov-tia.com,http://localhost:3000"
+CORS_ORIGINS: "https://moveproof.nov-tia.com,http://moveproof.nov-tia.com,http://localhost:3000"
 ```
 
 **Database hostname** — Docker Compose service is named `db`, not `postgres`:
 ```yaml
-DATABASE_URL: "postgresql://sro:sro_production_2026@db:5432/sro"
+DATABASE_URL: "postgresql://moveproof:moveproof_production_2026@db:5432/moveproof"
 ```
 
 **Postgres port** — locked to localhost only:
@@ -144,7 +144,7 @@ The deploy script writes the Nginx config with three location blocks:
 
 ```bash
 ssh root@104.238.128.128
-cd /opt/sovereign-robotics-ops
+cd /opt/moveproof
 git pull origin main
 bash deploy/vultr-deploy.sh
 ```
@@ -156,7 +156,7 @@ bash deploy/vultr-deploy.sh
 
 ```bash
 ssh root@104.238.128.128
-cd /opt/sovereign-robotics-ops
+cd /opt/moveproof
 git pull origin main
 docker compose -f docker-compose.vultr.yml build --no-cache frontend
 docker compose -f docker-compose.vultr.yml up -d frontend
@@ -179,7 +179,7 @@ ssh root@104.238.128.128
 
 ufw allow 443/tcp
 apt-get update && apt-get install -y certbot python3-certbot-nginx
-certbot --nginx -d sovereignroboticsops.nov-tia.com \
+certbot --nginx -d moveproof.nov-tia.com \
   --non-interactive --agree-tos --redirect \
   -m admin@nov-tia.com
 ```
@@ -197,15 +197,15 @@ certbot --nginx -d sovereignroboticsops.nov-tia.com \
 ## Step 5 — Update Nginx Manually After Certbot
 
 Certbot creates an SSL block but may strip the proxy locations out. Here's the complete
-working config for `/etc/nginx/sites-available/sro`:
+working config for `/etc/nginx/sites-available/moveproof`:
 
 ```nginx
 # HTTP → HTTPS redirect
 server {
     listen 80;
-    server_name sovereignroboticsops.nov-tia.com;
+    server_name moveproof.nov-tia.com;
 
-    if ($host = sovereignroboticsops.nov-tia.com) {
+    if ($host = moveproof.nov-tia.com) {
         return 301 https://$host$request_uri;
     }
     return 404;
@@ -214,10 +214,10 @@ server {
 # HTTPS server with all proxy rules
 server {
     listen 443 ssl;
-    server_name sovereignroboticsops.nov-tia.com;
+    server_name moveproof.nov-tia.com;
 
-    ssl_certificate /etc/letsencrypt/live/sovereignroboticsops.nov-tia.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/sovereignroboticsops.nov-tia.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/moveproof.nov-tia.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/moveproof.nov-tia.com/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
@@ -274,23 +274,23 @@ nginx -t && systemctl reload nginx
 
 ```bash
 # Health check (backend direct route)
-curl -s https://sovereignroboticsops.nov-tia.com/health | python3 -m json.tool
+curl -s https://moveproof.nov-tia.com/health | python3 -m json.tool
 
 # API through /api prefix (should return JSON list)
-curl -s https://sovereignroboticsops.nov-tia.com/api/runs | head -c 200
+curl -s https://moveproof.nov-tia.com/api/runs | head -c 200
 
 # Swagger docs
-curl -sI https://sovereignroboticsops.nov-tia.com/docs | head -3
+curl -sI https://moveproof.nov-tia.com/docs | head -3
 
 # Frontend loads (should return HTML, not JSON)
-curl -sI https://sovereignroboticsops.nov-tia.com/runs | head -3
+curl -sI https://moveproof.nov-tia.com/runs | head -3
 
 # HTTP redirects to HTTPS
-curl -sI http://sovereignroboticsops.nov-tia.com/ | head -5
+curl -sI http://moveproof.nov-tia.com/ | head -5
 
 # SSL certificate check
-echo | openssl s_client -connect sovereignroboticsops.nov-tia.com:443 \
-  -servername sovereignroboticsops.nov-tia.com 2>/dev/null | \
+echo | openssl s_client -connect moveproof.nov-tia.com:443 \
+  -servername moveproof.nov-tia.com 2>/dev/null | \
   openssl x509 -noout -subject -dates
 ```
 
@@ -322,9 +322,9 @@ Docker internal DNS only resolves the service name defined in docker-compose.yml
 **Fix:** In `docker-compose.vultr.yml`, change:
 ```yaml
 # Wrong
-DATABASE_URL: "postgresql://sro:sro_production_2026@postgres:5432/sro"
+DATABASE_URL: "postgresql://moveproof:moveproof_production_2026@postgres:5432/moveproof"
 # Correct
-DATABASE_URL: "postgresql://sro:sro_production_2026@db:5432/sro"
+DATABASE_URL: "postgresql://moveproof:moveproof_production_2026@db:5432/moveproof"
 ```
 
 ### Issue 3: Backend port not exposed to host
@@ -348,10 +348,10 @@ Note: Bind to `127.0.0.1` only — do NOT expose to `0.0.0.0` or the API would b
 
 **Cause:** Certbot creates an SSL `server {}` block on port 443 but only copies `server_name` and `listen` — it does NOT copy the `location` blocks from the HTTP block. So the SSL block has no proxy rules and falls through to the default root.
 
-**Fix:** Manually edit `/etc/nginx/sites-available/sro` and copy all three location blocks (`/api/`, `/(health|docs|...)`, `/`) into the SSL server block. See Step 5 above for the complete config.
+**Fix:** Manually edit `/etc/nginx/sites-available/moveproof` and copy all three location blocks (`/api/`, `/(health|docs|...)`, `/`) into the SSL server block. See Step 5 above for the complete config.
 
 ```bash
-nano /etc/nginx/sites-available/sro
+nano /etc/nginx/sites-available/moveproof
 # Paste the full config from Step 5
 nginx -t && systemctl reload nginx
 ```
@@ -370,7 +370,7 @@ docker compose -f docker-compose.vultr.yml up -d frontend
 
 ### Issue 6: `/runs` page shows raw JSON instead of frontend
 
-**Symptom:** Navigating to `https://sovereignroboticsops.nov-tia.com/runs/run_xxx` in the browser shows raw JSON `{"id":"run_xxx",...}` instead of the Next.js page.
+**Symptom:** Navigating to `https://moveproof.nov-tia.com/runs/run_xxx` in the browser shows raw JSON `{"id":"run_xxx",...}` instead of the Next.js page.
 
 **Cause:** When frontend and backend share the same origin, Nginx routes like `/runs` and `/missions` are ambiguous — both the Next.js frontend and FastAPI backend have endpoints at these paths. The Nginx regex `^/(runs|missions|...)` matched browser navigation to the frontend page and sent it to the backend.
 
@@ -408,7 +408,7 @@ docker compose -f docker-compose.vultr.yml up -d frontend
 **Fix:**
 1. Removed the hardcoded key from `deploy/vultr-deploy.sh` — now requires `GEMINI_API_KEY` env var.
 2. Generated a new API key at [Google AI Studio](https://aistudio.google.com/apikey).
-3. Set the new key in `/opt/sovereign-robotics-ops/.env` on the VM.
+3. Set the new key in `/opt/moveproof/.env` on the VM.
 4. Restarted the backend: `docker compose -f docker-compose.vultr.yml restart backend`.
 
 **Prevention:** Never commit API keys to source code. Use `.env` files (gitignored) or secret management.
@@ -424,15 +424,15 @@ docker compose -f docker-compose.vultr.yml up -d frontend
 **Fix:** Added an Nginx server block that listens on the public IP's port 3000 and 301-redirects to the new domain:
 
 ```nginx
-# In /etc/nginx/sites-available/sovereignroboticsops.nov-tia.com
+# In /etc/nginx/sites-available/moveproof.nov-tia.com
 server {
     listen 104.238.128.128:3000;
     server_name _;
-    return 301 https://sovereignroboticsops.nov-tia.com$request_uri;
+    return 301 https://moveproof.nov-tia.com$request_uri;
 }
 ```
 
-Key detail: `listen 104.238.128.128:3000` (public IP only) — Docker keeps `127.0.0.1:3000` for internal traffic. Paths are preserved, so `/missions` redirects to `https://sovereignroboticsops.nov-tia.com/missions`.
+Key detail: `listen 104.238.128.128:3000` (public IP only) — Docker keeps `127.0.0.1:3000` for internal traffic. Paths are preserved, so `/missions` redirects to `https://moveproof.nov-tia.com/missions`.
 
 ---
 
@@ -443,7 +443,7 @@ Key detail: `listen 104.238.128.128:3000` (public IP only) — Docker keeps `127
 ssh root@104.238.128.128
 
 # Pull latest code
-cd /opt/sovereign-robotics-ops && git pull origin main
+cd /opt/moveproof && git pull origin main
 
 # Rebuild and restart everything
 docker compose -f docker-compose.vultr.yml down --remove-orphans

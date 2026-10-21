@@ -1,5 +1,5 @@
 /**
- * SRO frontend API client.
+ * MoveProof frontend API client.
  *
  * Every exported function maps 1–1 to a backend REST endpoint.
  * All calls go through `fetchWithRetry` for automatic retry on

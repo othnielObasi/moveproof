@@ -4,8 +4,8 @@ import "./globals.css";
 import { NavLinks } from "@/components/NavLinks";
 
 export const metadata = {
-  title: "Sovereign Robotics Ops",
-  description: "AI Governance for Autonomous Robots - Track 1: Autonomous Robotics Control in Simulation",
+  title: "MoveProof",
+  description: "MoveProof — every robot move, proven safe before it happens. NVIDIA Nemotron proposes; a governance gate decides.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -20,11 +20,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/30">
-                    <span className="text-white font-bold text-lg">S</span>
+                    <span className="text-white font-bold text-lg">M</span>
                   </div>
                   <div>
-                    <div className="font-bold text-white">Sovereign Robotics Ops</div>
-                    <div className="text-xs text-slate-400">Track 1: Autonomous Control</div>
+                    <div className="font-bold text-white">MoveProof</div>
+                    <div className="text-xs text-slate-400">Every move, proven safe</div>
                   </div>
                 </Link>
                 
@@ -49,8 +49,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Footer */}
         <footer className="border-t border-slate-700 mt-8 py-6">
           <div className="max-w-7xl mx-auto px-4 flex justify-between text-sm text-slate-500">
-            <span>Sovereign AI Labs</span>
-            <span>Ready for Gemini Robotics 1.5</span>
+            <span>NOVTIA</span>
+            <span>Powered by NVIDIA Nemotron on Nebius Token Factory</span>
           </div>
         </footer>
       </body>

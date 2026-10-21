@@ -1,12 +1,17 @@
-# Sovereign Robotics Ops
+# MoveProof
 
-> Runtime governance for autonomous robots. Every action evaluated, every decision traceable, every violation blocked.
+> **Every robot move, proven safe before it happens.**
+> An NVIDIA Nemotron planner proposes. A deterministic governance gate decides. Every decision leaves a signed, hash-chained receipt.
+
+Built for the **Nebius × NVIDIA Global AI Hackathon** (Physical AI track): NVIDIA Nemotron models served on **Nebius Token Factory**.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![Next.js](https://img.shields.io/badge/next.js-14-black.svg)](https://nextjs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111+-009688.svg)](https://fastapi.tiangolo.com)
 [![Pydantic](https://img.shields.io/badge/Pydantic-2.x-e92063.svg)](https://docs.pydantic.dev)
+[![NVIDIA Nemotron](https://img.shields.io/badge/NVIDIA-Nemotron-76b900.svg)](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/)
+[![Nebius Token Factory](https://img.shields.io/badge/Nebius-Token%20Factory-1f1f1f.svg)](https://nebius.com/services/token-factory)
 
 ---
 
@@ -16,9 +21,9 @@ Autonomous robots in warehouses, factories, and logistics have no compliance lay
 
 The **EU AI Act** (enforced 2026) classifies autonomous robotics as high-risk AI, mandating runtime risk management, human oversight, and tamper-evident audit trails. **ISO 42001** adoption is accelerating. Yet no existing product provides runtime governance — until now.
 
-## What Sovereign Does
+## What MoveProof Does
 
-Sovereign Robotics Ops (SRO) is a **real-time governance layer** that interposes between the robot's AI planner and the physical actuators. Every proposed action is intercepted, evaluated against configurable safety policies in sub-100 ms, and either approved, modified, or blocked — *before* execution.
+MoveProof is a **real-time governance layer** that interposes between the robot's AI planner and the physical actuators. Every proposed action is intercepted, evaluated against configurable safety policies in sub-100 ms, and either approved, modified, or blocked — *before* execution.
 
 ### Core Capabilities
 
@@ -30,7 +35,8 @@ Sovereign Robotics Ops (SRO) is a **real-time governance layer** that interposes
 | **Governance receipts** | Structured proof documents for each decision, queryable per run/policy/time |
 | **Regulatory compliance** | Framework-aligned reports for ISO 42001, EU AI Act, and NIST AI RMF with chain verification |
 | **Operator oversight** | HITL triggers when risk ≥ 0.75; approval/deny/override workflows with full audit trail |
-| **AI planner cascade** | Gemini 2.5 Pro → Gemini 2.0 Flash → deterministic fallback; never unguarded execution |
+| **Tiered Nemotron planner** | Fast Nemotron models propose each step; Nemotron Ultra plans missions and replans after a denial; deterministic fallback; never unguarded execution |
+| **Cost & latency per decision** | Every model call logged with tier, model, latency and tokens (`GET /llm/usage`) |
 | **Circuit breaker** | 3 consecutive governance denials auto-escalate to NEEDS_REVIEW for operator attention |
 | **Real-time dashboard** | Live 2D warehouse map, telemetry, policy state, and WebSocket event feed |
 | **10 injectable scenarios** | Reproducible safety scenarios for testing and certification demonstrations |
@@ -43,13 +49,51 @@ Sovereign Robotics Ops (SRO) is a **real-time governance layer** that interposes
 
 ---
 
+## NVIDIA Nemotron on Nebius Token Factory
+
+MoveProof's planner runs on NVIDIA Nemotron models served by Nebius Token Factory's OpenAI-compatible API ([`backend/app/services/nemotron_planner.py`](backend/app/services/nemotron_planner.py)).
+
+| Job | Tier | Default model | Why |
+|---|---|---|---|
+| Per-step action proposals, scene / telemetry / failure analysis | Fast | Nemotron 3.5 Lightning, Nemotron 3 Super (top two raced) | Runs every control step, so latency and cost dominate |
+| Mission planning, replanning after a governance denial | Reasoning | Nemotron 3 Ultra (tried first, alone; fast tier as fallback) | Rare, high-stakes calls where reasoning quality matters |
+
+The safety guarantee never depends on the model behaving well: the planner only *proposes*; the policy engine decides. If every model fails, a deterministic plan runs, still governed.
+
+**Check your Token Factory catalogue and smoke-test both tiers:**
+
+```bash
+export NEBIUS_API_KEY=...
+python scripts/check_token_factory.py
+```
+
+Model IDs are configurable (`NEMOTRON_FAST_MODELS`, `NEMOTRON_REASONING_MODEL`) — see [`.env.example`](.env.example).
+
+---
+
+## Built on Sovereign Robotics Ops
+
+MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.com/othnielObasi/sovereign-robotics-ops) (3rd of 94 in an AI robotics challenge; featured on Vultr's booth at NVIDIA GTC 2026). That project proved a governance gate can stop an AI-planned robot move. The full commit history is preserved here.
+
+**What changed during the hackathon submission period:**
+
+- [x] Planner moved from Google Gemini to **NVIDIA Nemotron on Nebius Token Factory**, with tiered routing (fast models per step, Ultra for planning and replanning)
+- [x] Per-call latency and token telemetry (`GET /llm/usage`)
+- [x] Rebrand to MoveProof
+- [ ] Enhanced warehouse: richer layout, moving workers and forklifts, robot camera view, seeded scenarios
+- [ ] NVIDIA vision model perception, cross-checked by the governance gate against simulator ground truth
+- [ ] Safety benchmark at scale on Nebius Serverless Jobs: unsafe moves proposed vs. unsafe moves executed
+- [ ] Live external context via Tavily, treated as untrusted input
+
+---
+
 ## Quick Start
 
 ### Docker Compose (recommended)
 
 ```bash
-git clone https://github.com/othnielObasi/sovereign-robotics-ops.git
-cd sovereign-robotics-ops
+git clone https://github.com/othnielObasi/moveproof.git
+cd moveproof
 docker compose up -d
 ```
 
@@ -70,7 +114,7 @@ uvicorn server:app --host 0.0.0.0 --port 8090 &
 
 # 2. Start the backend
 cd backend && pip install -e ".[dev]"
-export DATABASE_URL="sqlite:///./data/sro.db"
+export DATABASE_URL="sqlite:///./data/moveproof.db"
 export SIM_BASE_URL="http://localhost:8090"
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 
@@ -78,14 +122,17 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 cd frontend && npm install && npm run dev
 ```
 
-> **Note:** Without a `GEMINI_API_KEY` set, the AI planner uses a deterministic fallback — all features work, just without LLM-generated plans.
+> **Note:** Without `NEBIUS_API_KEY` set, the AI planner uses a deterministic fallback — all features work, just without LLM-generated plans.
 
-### Optional: Gemini AI Integration
+### Enable NVIDIA Nemotron (Nebius Token Factory)
 
 ```bash
-export GEMINI_API_KEY="your-key-here"
-# Restart backend — planner will cascade: Gemini 2.5 Pro → 2.0 Flash → fallback
+export NEBIUS_API_KEY="your-token-factory-key"
+export LLM_ENABLED=true LLM_PROVIDER=nemotron
+# Restart backend — fast Nemotron per step, Nemotron Ultra for planning, deterministic fallback
 ```
+
+Gemini remains available as a secondary provider (`GEMINI_API_KEY`, `GEMINI_ENABLED=true`).
 
 ---
 
@@ -128,8 +175,8 @@ export GEMINI_API_KEY="your-key-here"
 │  └──────────────────────┬──────────────────────────────────┘ │
 │                         │                                     │
 │  ┌──────────────────────▼──────────────────────────────────┐ │
-│  │              AI Planner (cascading)                       │ │
-│  │  Gemini 2.5 Pro → Gemini 2.0 Flash → Deterministic      │ │
+│  │      AI Planner — NVIDIA Nemotron on Nebius Token Factory │ │
+│  │  Fast tier → Ultra (plan/replan) → Deterministic         │ │
 │  │  Agentic ReAct (propose → govern → replan loop)          │ │
 │  └──────────────────────┬──────────────────────────────────┘ │
 └──────────────────────────┼───────────────────────────────────┘
@@ -262,7 +309,8 @@ Full interactive docs at `/docs` (Swagger UI) and `/redoc`.
 | POST | `/llm/agentic/propose` | Agentic ReAct reasoning (propose → govern → replan loop) |
 | POST | `/llm/plan` | Generate multi-waypoint plan with per-waypoint governance |
 | POST | `/llm/execute` | Execute a governed plan (waypoint-by-waypoint with audit trail) |
-| GET | `/llm/models` | Available AI models and cascade configuration |
+| GET | `/llm/models` | Active provider, model tiers and cascade configuration |
+| GET | `/llm/usage` | Per-model latency (p50/p95) and token usage, by tier |
 
 #### Simulator Proxy
 
@@ -304,7 +352,7 @@ The mock simulator models a realistic **40 × 25 m warehouse** environment:
 ## Project Structure
 
 ```
-sovereign-robotics-ops/
+moveproof/
 ├── backend/                      # Governance API — Python 3.11, FastAPI
 │   ├── app/
 │   │   ├── api/                  # 9 route modules (missions, runs, governance,
@@ -315,10 +363,10 @@ sovereign-robotics-ops/
 │   │   ├── policies/             # Policy catalog (YAML) + evaluation engine
 │   │   ├── schemas/              # Pydantic v2 request/response models
 │   │   ├── services/             # Governance engine, run lifecycle, compliance,
-│   │   │                         #   mission service, Gemini planner, sim adapter
+│   │   │                         #   mission service, Nemotron planner, sim adapter
 │   │   └── utils/                # SHA-256 hashing, ID generation, time
 │   ├── alembic/                  # Database migrations (3 versions)
-│   └── tests/                    # pytest suite (93+ tests)
+│   └── tests/                    # pytest suite (107 tests)
 │
 ├── frontend/                     # Operator Dashboard — Next.js 14, React 18, TS
 │   └── src/
@@ -377,7 +425,7 @@ CI/CD is configured in `.github/workflows/` — push to `main` triggers backend 
 ## Testing
 
 ```bash
-# Backend tests (93+ tests — governance, API smoke, plan execution, lifecycle)
+# Backend tests (107 tests — governance, API smoke, plan execution, lifecycle, Nemotron routing)
 cd backend && python -m pytest tests/ -q
 
 # Frontend type-check
@@ -399,7 +447,7 @@ The test suite covers:
 |-------|-----------|---------|
 | **Frontend** | Next.js, React, TypeScript, Tailwind CSS | 14.x, 18.x, 5.x, 3.x |
 | **Backend** | FastAPI, Pydantic, SQLAlchemy, Alembic | 0.111+, 2.x, 2.0+, 1.13+ |
-| **AI Planner** | Google Gemini (2.5 Pro / 2.0 Flash), deterministic fallback | — |
+| **AI Planner** | NVIDIA Nemotron (Lightning / Super / Ultra) on Nebius Token Factory; Gemini secondary; deterministic fallback | — |
 | **Database** | PostgreSQL (prod), SQLite (dev) | 16 |
 | **Simulator** | FastAPI + custom physics engine | — |
 | **Auth** | JWT (python-jose), bcrypt (passlib) | — |
@@ -415,7 +463,7 @@ The test suite covers:
 | [docs/architecture.md](docs/architecture.md) | Full system architecture, data models, and component diagrams |
 | [docs/api.md](docs/api.md) | API reference with request/response examples |
 | [docs/DEVELOPER.md](docs/DEVELOPER.md) | Developer guide — local setup, CI, run lifecycle, governance engine internals |
-| [docs/GEMINI_INTEGRATION.md](docs/GEMINI_INTEGRATION.md) | Gemini AI planner integration, cascade model, and governance interception flow |
+| [docs/GEMINI_INTEGRATION.md](docs/GEMINI_INTEGRATION.md) | Original Gemini planner integration (now the secondary provider) |
 | [docs/SIMULATOR_CONFIG.md](docs/SIMULATOR_CONFIG.md) | Simulator connection configuration (`SIM_BASE_URL`, `SIM_TOKEN`) |
 | [docs/demo-script.md](docs/demo-script.md) | 4-minute demo script with scenario injection walkthrough |
 | [docs/whitepaper.md](docs/whitepaper.md) | Technical whitepaper — architecture, policy engine, chain-of-trust, compliance |
@@ -432,10 +480,13 @@ The test suite covers:
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `DATABASE_URL` | No | `sqlite:///./data/sro.db` | Database connection string |
+| `DATABASE_URL` | No | `sqlite:///./data/moveproof.db` | Database connection string |
 | `SIM_BASE_URL` | No | `http://localhost:8090` | Simulator URL |
 | `SIM_TOKEN` | No | `dev-token-not-for-production` | Shared auth token for simulator |
-| `GEMINI_API_KEY` | No | — | Google Gemini API key (enables AI planning) |
+| `NEBIUS_API_KEY` | No | — | Nebius Token Factory key (enables Nemotron planning) |
+| `NEMOTRON_FAST_MODELS` | No | Lightning, Super | Comma-separated fast-tier model IDs |
+| `NEMOTRON_REASONING_MODEL` | No | Nemotron 3 Ultra | Planning / replanning model ID |
+| `GEMINI_API_KEY` | No | — | Google Gemini API key (secondary provider) |
 | `JWT_SECRET` | No | auto-generated | Secret for JWT token signing |
 | `AUTH_REQUIRED` | No | `false` | Enforce authentication on all endpoints |
 | `CORS_ORIGINS` | No | `*` | Comma-separated allowed origins |

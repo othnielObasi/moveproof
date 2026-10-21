@@ -11,7 +11,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_BASE || "/api";
 
 interface SystemStatus {
   api: 'connected' | 'disconnected' | 'checking';
-  gemini: 'enabled' | 'disabled' | 'unknown';
+  planner: 'enabled' | 'disabled' | 'unknown';
+  provider: string;
   database: 'connected' | 'disconnected' | 'unknown';
 }
 
@@ -39,7 +40,8 @@ export default function HomePage() {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [status, setStatus] = useState<SystemStatus>({
     api: 'checking',
-    gemini: 'unknown',
+    planner: 'unknown',
+    provider: '',
     database: 'unknown'
   });
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +75,8 @@ export default function HomePage() {
           const data = await res.json();
           setStatus({
             api: 'connected',
-            gemini: data.gemini_enabled ? 'enabled' : 'disabled',
+            planner: (data.nemotron_enabled || data.gemini_enabled) ? 'enabled' : 'disabled',
+            provider: data.planner_provider || (data.gemini_enabled ? 'gemini' : 'fallback'),
             database: 'connected'
           });
           setError(null);
@@ -166,7 +169,7 @@ export default function HomePage() {
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold mb-4">
           <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-            Sovereign Robotics Ops
+            MoveProof
           </span>
         </h1>
         <p className="text-xl text-slate-400 mb-6">
@@ -198,21 +201,21 @@ export default function HomePage() {
           <p className="text-xs text-slate-500 mt-1">{API_URL || '(same origin)'}</p>
         </div>
 
-        {/* Gemini Status */}
+        {/* AI Planner Status */}
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-400 text-sm">Gemini Robotics</span>
+            <span className="text-slate-400 text-sm">AI Planner</span>
             <div className={`w-3 h-3 rounded-full ${
-              status.gemini === 'enabled' ? 'bg-green-500' :
-              status.gemini === 'disabled' ? 'bg-yellow-500' : 'bg-slate-500'
+              status.planner === 'enabled' ? 'bg-green-500' :
+              status.planner === 'disabled' ? 'bg-yellow-500' : 'bg-slate-500'
             }`} />
           </div>
           <div className="text-2xl font-bold">
-            {status.gemini === 'enabled' ? '🤖 Enabled' :
-             status.gemini === 'disabled' ? '📦 Mock Mode' : '❓ Unknown'}
+            {status.planner === 'enabled' ? (status.provider === 'nemotron' ? '🟩 Nemotron' : '🤖 Gemini') :
+             status.planner === 'disabled' ? '📦 Mock Mode' : '❓ Unknown'}
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            {status.gemini === 'disabled' ? 'Using mock fallback' : 'AI planning active'}
+            {status.planner === 'disabled' ? 'Using deterministic fallback' : status.provider === 'nemotron' ? 'NVIDIA Nemotron on Nebius Token Factory' : 'AI planning active'}
           </p>
         </div>
 
@@ -276,7 +279,7 @@ export default function HomePage() {
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500"
                 placeholder="e.g. Deliver pallet to Bay 3"
               />
-              <p className="text-[10px] text-slate-500 mt-1">This title is sent to the Gemini LLM as the planning instruction</p>
+              <p className="text-[10px] text-slate-500 mt-1">This title is sent to the Nemotron planner as the planning instruction</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>

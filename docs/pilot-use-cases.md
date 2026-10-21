@@ -6,7 +6,7 @@
 
 **Problem:** Insurer requires proof that robots cannot endanger workers. Current setup: robots have emergency stop buttons, but no continuous compliance evidence.
 
-**Sovereign solves:**
+**MoveProof solves:**
 - Real-time geofence enforcement prevents robots from entering restricted zones
 - Human proximity policies enforce SLOW/STOP automatically when workers are nearby
 - Every action + decision hash-chained → downloadable compliance report for insurer
@@ -14,7 +14,7 @@
 
 **Compliance frameworks:** ISO 42001 (AI management), internal safety operations manual
 
-**Deployment:** Sovereign API runs alongside existing fleet management system. Robot planner calls `/governance/evaluate` before each move command. Dashboard deployed for safety officers.
+**Deployment:** MoveProof API runs alongside existing fleet management system. Robot planner calls `/governance/evaluate` before each move command. Dashboard deployed for safety officers.
 
 ---
 
@@ -24,7 +24,7 @@
 
 **Problem:** EU AI Act (enforcement 2026) requires high-risk AI systems to have: risk management, human oversight, logging, transparency. OEM needs to demonstrate this to customers.
 
-**Sovereign solves:**
+**MoveProof solves:**
 - Policy engine = risk management system (configurable, auditable)
 - HITL escalation = human oversight (automatic trigger on high-risk actions)
 - Hash-chained event log = logging with integrity verification
@@ -33,7 +33,7 @@
 
 **Compliance frameworks:** EU AI Act, ISO 42001
 
-**Deployment:** Sovereign shipped as embedded middleware in OEM's robot software stack. Each robot evaluates locally; audit data syncs to central compliance dashboard.
+**Deployment:** MoveProof shipped as embedded middleware in OEM's robot software stack. Each robot evaluates locally; audit data syncs to central compliance dashboard.
 
 ---
 
@@ -43,7 +43,7 @@
 
 **Problem:** Construction sites have unpredictable human presence. Equipment must stop immediately when workers enter operating zones. Current solution: manual spotters and kill switches.
 
-**Sovereign solves:**
+**MoveProof solves:**
 - Human detection policies with distance-based escalation (SLOW at 3m, STOP at 1m)
 - Speed limit enforcement per zone (different limits near scaffolding vs. open areas)
 - Uncertainty policy: if sensor confidence drops below threshold, equipment pauses
@@ -51,7 +51,7 @@
 
 **Compliance frameworks:** OSHA autonomous equipment regulations, site safety plans
 
-**Deployment:** Sovereign runs on edge compute alongside equipment control system. Geofence boundaries configured per site layout.
+**Deployment:** MoveProof runs on edge compute alongside equipment control system. Geofence boundaries configured per site layout.
 
 ---
 
@@ -61,7 +61,7 @@
 
 **Problem:** Delivery robots share space with pedestrians, cyclists, and vehicles. Municipalities require proof of safe operation for permits. Incidents = permit revocation.
 
-**Sovereign solves:**
+**MoveProof solves:**
 - Pedestrian proximity policies with zone-aware speed limits (school zones, crosswalks)
 - Geofence enforcement prevents robots from entering banned areas
 - Every decision logged with GPS context → exportable compliance reports for city regulators
@@ -69,7 +69,7 @@
 
 **Compliance frameworks:** Municipal robotics permits, NIST AI RMF
 
-**Deployment:** Sovereign cloud API; each robot calls governance API before executing navigation commands.
+**Deployment:** MoveProof cloud API; each robot calls governance API before executing navigation commands.
 
 ---
 
@@ -79,7 +79,7 @@
 
 **Problem:** Patrol robots must follow strict rules of engagement: never approach within X meters of a person without authorization, restrict access to certain areas after hours, escalate to human operator for any unusual situation.
 
-**Sovereign solves:**
+**MoveProof solves:**
 - Policy engine enforces rules of engagement at runtime (not just in training)
 - Multi-level escalation: autonomous → supervisory → human operator
 - Complete audit trail for every patrol decision (critical for incident review)

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 async function record() {
-  const url = process.env.SRO_URL || 'http://104.238.128.128/';
+  const url = process.env.MoveProof_URL || 'http://104.238.128.128/';
   const outDir = path.resolve(__dirname, '..', 'recordings');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
@@ -50,7 +50,7 @@ async function record() {
     process.exit(2);
   }
   const latest = path.join(outDir, files[0].f);
-  const outMp4 = path.resolve('/tmp', 'sro_demo.mp4');
+  const outMp4 = path.resolve('/tmp', 'moveproof_demo.mp4');
   console.log('Converting', latest, '->', outMp4);
 
   const { execSync } = require('child_process');

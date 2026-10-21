@@ -1,6 +1,6 @@
 # Governance-Bounded Production Roadmap
 
-> Gap analysis and implementation plan for evolving SRO from hackathon prototype
+> Gap analysis and implementation plan for evolving MoveProof from hackathon prototype
 > to a governance-bounded optimization platform inside a hard safety envelope.
 >
 > **Principle**: Do not treat this as reward-led autonomy.

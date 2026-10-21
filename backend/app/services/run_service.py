@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Run lifecycle manager — the runtime core of the SRO platform.
+"""Run lifecycle manager — the runtime core of the MoveProof platform.
 
 This module owns the full lifecycle of a "run" (a single execution attempt
 of a mission).  Key responsibilities:

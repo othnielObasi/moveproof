@@ -1,6 +1,6 @@
-# Production Roadmap — Sovereign Robotics Ops
+# Production Roadmap — MoveProof
 
-> A phased plan to move SRO from hackathon prototype to production-ready deployment.
+> A phased plan to move MoveProof from hackathon prototype to production-ready deployment.
 
 ---
 
@@ -10,7 +10,7 @@
 |---|---|---|
 | Dev-token endpoint open | `POST /auth/dev-token` gives anyone a valid JWT with zero authentication | Gate behind `environment != "production"` or remove entirely |
 | Auth off by default | `auth_required` defaults to `False` in `backend/app/config.py` | Default to `True`; require explicit env var override for dev only |
-| Hardcoded DB password | `sro_production_2026` in plaintext in `docker-compose.vultr.yml` | Move to secret manager or `.env` file excluded from version control |
+| Hardcoded DB password | `moveproof_production_2026` in plaintext in `docker-compose.vultr.yml` | Move to secret manager or `.env` file excluded from version control |
 | JWT secret regenerates on restart | If `JWT_SECRET` env var is unset, every restart invalidates all tokens | Fail fast on startup if `JWT_SECRET` is unset in production |
 | No HTTPS configuration | TLS only configured for Fly.io, not the Vultr deployment | Add Nginx + Let's Encrypt config or Caddy reverse proxy |
 | No rate limiting | All endpoints unprotected from abuse | Add `slowapi` or equivalent middleware |

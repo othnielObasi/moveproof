@@ -1,10 +1,10 @@
-# Sovereign Robotics Ops
+# MoveProof
 
 ## A Real-Time Governance Layer for Autonomous Robotic Systems
 
 **White Paper v1.0 — March 2026**
 
-**Sovereign AI Labs**
+**NOVTIA**
 
 ---
 
@@ -12,9 +12,9 @@
 
 As autonomous robots transition from controlled laboratory environments into shared human workspaces — warehouses, hospitals, construction sites, and public infrastructure — the absence of enforceable runtime governance represents a critical safety gap. Current approaches rely on post-hoc log analysis, opaque neural-network decision-making, and operator trust in AI correctness. These are insufficient for safety-critical deployment and regulatory compliance under emerging frameworks such as the EU AI Act, ISO/IEC 42001:2023, and the NIST AI Risk Management Framework.
 
-**Sovereign Robotics Ops (SRO)** introduces a real-time governance layer that interposes between AI-generated action proposals and physical robot execution. Every proposed action is evaluated against configurable safety policies in sub-100ms latency, producing cryptographically verifiable audit trails suitable for regulatory submission. The system implements human-in-the-loop oversight triggers, cascading AI planner fallbacks, and compliance report generation aligned with three major international frameworks.
+**MoveProof** introduces a real-time governance layer that interposes between AI-generated action proposals and physical robot execution. Every proposed action is evaluated against configurable safety policies in sub-100ms latency, producing cryptographically verifiable audit trails suitable for regulatory submission. The system implements human-in-the-loop oversight triggers, cascading AI planner fallbacks, and compliance report generation aligned with three major international frameworks.
 
-This paper presents the architectural design, policy engine, chain-of-trust mechanism, AI integration strategy, and compliance framework of SRO.
+This paper presents the architectural design, policy engine, chain-of-trust mechanism, AI integration strategy, and compliance framework of MoveProof.
 
 ---
 
@@ -42,13 +42,13 @@ The global autonomous mobile robot (AMR) market is projected to exceed $20 billi
 
 Traditional robotic safety relies on hardware interlocks, pre-computed safe operating envelopes, and human teleoperators. The introduction of large language models (LLMs) and vision-language-action models (VLAs) as robotic planners — exemplified by Google DeepMind's Gemini Robotics and similar foundation models — dramatically expands the action space while simultaneously reducing the predictability of robot behavior.
 
-Sovereign Robotics Ops addresses this gap by introducing **governance as computation**: a software layer that enforces safety policies, captures tamper-evident audit trails, and bridges the gap between AI autonomy and regulatory accountability.
+MoveProof addresses this gap by introducing **governance as computation**: a software layer that enforces safety policies, captures tamper-evident audit trails, and bridges the gap between AI autonomy and regulatory accountability.
 
 ### 1.1 Design Philosophy
 
-SRO is guided by three core principles:
+MoveProof is guided by three core principles:
 
-- **Govern, don't replace.** SRO does not replace the robot's perception or planning stack. It intercepts proposed actions, evaluates them against policy, and gates execution.
+- **Govern, don't replace.** MoveProof does not replace the robot's perception or planning stack. It intercepts proposed actions, evaluates them against policy, and gates execution.
 - **Prove, don't promise.** Every governance decision is cryptographically hashed and chained, producing an independently verifiable audit trail.
 - **Degrade, don't fail.** When AI planners are unavailable, network connections drop, or perception confidence is low, the system falls back to progressively more conservative behaviors — never to unguarded execution.
 
@@ -76,7 +76,7 @@ Foundation models used as robotic planners (e.g., Gemini Robotics-ER 1.5) introd
 
 ### 2.4 Requirements
 
-SRO was designed to satisfy the following requirements:
+MoveProof was designed to satisfy the following requirements:
 
 | Requirement | Description |
 |---|---|
@@ -92,7 +92,7 @@ SRO was designed to satisfy the following requirements:
 
 ## 3. System Architecture
 
-SRO employs a **Sense-Think-Act-Audit** control loop architecture, extending the classical robotics Sense-Think-Act paradigm with a mandatory governance gate and audit chain.
+MoveProof employs a **Sense-Think-Act-Audit** control loop architecture, extending the classical robotics Sense-Think-Act paradigm with a mandatory governance gate and audit chain.
 
 ### 3.1 High-Level Architecture
 
@@ -165,7 +165,7 @@ Each active run executes an asynchronous control loop at approximately 1 Hz (con
 
 ### 4.1 Policy-as-Code Architecture
 
-SRO implements policies as executable Python functions, evaluated deterministically against each action proposal. This approach provides:
+MoveProof implements policies as executable Python functions, evaluated deterministically against each action proposal. This approach provides:
 
 - **Determinism**: Identical inputs always produce identical decisions (critical for audit reproducibility)
 - **Sub-millisecond evaluation**: No network calls, no external dependencies
@@ -218,7 +218,7 @@ Each governance evaluation produces one of three outcomes:
 
 ### 5.1 Design Rationale
 
-Regulatory frameworks (EU AI Act Article 12, ISO 42001 Clause 9) require that high-risk AI systems maintain logs that are "automatically generated" and "allow the tracing back of the system's operation." SRO's chain-of-trust mechanism provides this through a blockchain-inspired linked hash chain.
+Regulatory frameworks (EU AI Act Article 12, ISO 42001 Clause 9) require that high-risk AI systems maintain logs that are "automatically generated" and "allow the tracing back of the system's operation." MoveProof's chain-of-trust mechanism provides this through a blockchain-inspired linked hash chain.
 
 ### 5.2 Event Structure
 
@@ -258,7 +258,7 @@ This construction ensures:
 
 - **Tamper detection**: Modifying any event invalidates all subsequent hashes
 - **Ordering proof**: The chain encodes a strict total order of events
-- **Independent verification**: Any party with the event data can recompute and verify the chain without access to the SRO system
+- **Independent verification**: Any party with the event data can recompute and verify the chain without access to the MoveProof system
 
 ### 5.4 Chain Verification
 
@@ -284,7 +284,7 @@ This verification runs automatically during compliance report generation and is 
 
 ### 6.1 Multi-Tier Planning Architecture
 
-SRO implements a cascading planner architecture with four tiers of intelligence and progressively stronger safety guarantees:
+MoveProof implements a cascading planner architecture with four tiers of intelligence and progressively stronger safety guarantees:
 
 ```
 Tier 1: Agentic ReAct Planner (Multi-step reasoning with tool use)
@@ -340,7 +340,7 @@ This guarantees that **AI planner unavailability never results in unguarded robo
 
 ### 7.1 Escalation Model
 
-SRO implements a three-tier oversight model aligned with EU AI Act Article 14 (Human Oversight):
+MoveProof implements a three-tier oversight model aligned with EU AI Act Article 14 (Human Oversight):
 
 | Tier | Trigger | Operator Action |
 |---|---|---|
@@ -383,11 +383,11 @@ All data streams via WebSocket with sub-second update latency.
 
 ### 8.1 Framework Alignment
 
-SRO maps its governance capabilities to three major regulatory frameworks:
+MoveProof maps its governance capabilities to three major regulatory frameworks:
 
 #### EU AI Act (High-Risk AI — Articles 9–15)
 
-| Article | Requirement | SRO Implementation |
+| Article | Requirement | MoveProof Implementation |
 |---|---|---|
 | Art. 9 | Risk Management System | Real-time risk scoring, policy catalog, configurable thresholds |
 | Art. 10 | Data Governance | Structured telemetry storage, immutable audit log, hash-chain integrity |
@@ -399,7 +399,7 @@ SRO maps its governance capabilities to three major regulatory frameworks:
 
 #### ISO/IEC 42001:2023 — AI Management System
 
-| Clause | Requirement | SRO Implementation |
+| Clause | Requirement | MoveProof Implementation |
 |---|---|---|
 | Clause 6 | Planning / Risk Assessment | Continuous risk scoring with composite policy evaluation |
 | Clause 7 | Support / Resources | Observability stack (OpenTelemetry, Grafana), structured logging |
@@ -409,7 +409,7 @@ SRO maps its governance capabilities to three major regulatory frameworks:
 
 #### NIST AI Risk Management Framework (AI RMF 1.0)
 
-| Function | SRO Implementation |
+| Function | MoveProof Implementation |
 |---|---|
 | **GOVERN** | Policy-as-code engine, configurable risk thresholds, human-in-the-loop escalation |
 | **MAP** | Telemetry capture, perception uncertainty tracking, zone classification |
@@ -418,7 +418,7 @@ SRO maps its governance capabilities to three major regulatory frameworks:
 
 ### 8.2 Compliance Report Generation
 
-SRO generates structured compliance reports containing:
+MoveProof generates structured compliance reports containing:
 
 - Run metadata (mission, duration, total events)
 - Aggregate metrics (approval rate, average risk score, policy hit frequency)
@@ -434,7 +434,7 @@ Reports are generated on-demand via the API (`GET /compliance/report/{run_id}`) 
 
 ### 9.1 Design Philosophy
 
-SRO is designed **simulation-first**: the governance layer is developed and validated against simulated environments before deployment to physical robots. This approach enables:
+MoveProof is designed **simulation-first**: the governance layer is developed and validated against simulated environments before deployment to physical robots. This approach enables:
 
 - **Rapid policy iteration**: Test new policies against recorded scenarios without physical risk
 - **Deterministic reproduction**: Replay exact telemetry sequences for incident investigation
@@ -452,7 +452,7 @@ SimAdapter Interface
 └── post_scenario(name) → ScenarioResult
 ```
 
-This adapter pattern allows SRO to work with:
+This adapter pattern allows MoveProof to work with:
 
 - **Mock Simulator** (included) — Lightweight FastAPI physics simulation with walking humans, obstacles, and zone management
 - **Gazebo** — ROS-based robotics simulator
@@ -473,7 +473,7 @@ The included mock simulator provides a warehouse environment with:
 
 ## 10. Operational Resilience
 
-SRO is designed to maintain safety under degraded conditions. The system implements multiple resilience patterns:
+MoveProof is designed to maintain safety under degraded conditions. The system implements multiple resilience patterns:
 
 ### 10.1 Graceful Degradation Hierarchy
 
@@ -488,7 +488,7 @@ SRO is designed to maintain safety under degraded conditions. The system impleme
 
 ### 10.2 Run Recovery
 
-On process restart or deployment, SRO automatically:
+On process restart or deployment, MoveProof automatically:
 
 1. **Rehydrates in-memory plans** from persisted PLAN events in the database
 2. **Detects orphaned runs** (status "running" with no active loop) and relaunches their control loops
@@ -506,7 +506,7 @@ The control loop monitors position deltas across cycles. If the robot remains st
 
 ### 11.1 Container Architecture
 
-SRO is fully containerized using Docker Compose:
+MoveProof is fully containerized using Docker Compose:
 
 ```yaml
 Services:
@@ -557,7 +557,7 @@ Services:
 
 ## 13. Conclusion
 
-Sovereign Robotics Ops demonstrates that **runtime governance for autonomous robots is both technically feasible and architecturally composable**. By interposing a policy evaluation layer between AI planning and physical execution, SRO provides:
+MoveProof demonstrates that **runtime governance for autonomous robots is both technically feasible and architecturally composable**. By interposing a policy evaluation layer between AI planning and physical execution, MoveProof provides:
 
 1. **Safety enforcement** — Every action is policy-evaluated before execution, with sub-100ms latency
 2. **Cryptographic accountability** — SHA-256 hash-chained audit trails enable independent verification and tamper detection
@@ -565,7 +565,7 @@ Sovereign Robotics Ops demonstrates that **runtime governance for autonomous rob
 4. **Human oversight** — Real-time operator dashboards with escalation triggers and approval workflows
 5. **Operational resilience** — Cascading AI fallbacks, run recovery, and fail-safe defaults ensure continuous safe operation
 
-As autonomous robots move from research labs to shared human environments, governance cannot remain an afterthought. SRO provides the architectural foundation for building autonomous systems that are not only intelligent but **accountable, auditable, and safe by design**.
+As autonomous robots move from research labs to shared human environments, governance cannot remain an afterthought. MoveProof provides the architectural foundation for building autonomous systems that are not only intelligent but **accountable, auditable, and safe by design**.
 
 ---
 
@@ -580,11 +580,11 @@ As autonomous robots move from research labs to shared human environments, gover
 
 ---
 
-## About Sovereign AI Labs
+## About NOVTIA
 
-**Sovereign AI Labs** builds governance infrastructure for autonomous systems. Founded by Othniel Agera (MSc Applied AI & Data Science, DeepLearning.AI Red Team Certified), the team brings over a decade of AI product management experience to the challenge of making autonomous robots safe, accountable, and regulation-ready.
+**NOVTIA** builds governance infrastructure for autonomous systems. Founded by Othniel Agera (MSc Applied AI & Data Science, DeepLearning.AI Red Team Certified), the team brings over a decade of AI product management experience to the challenge of making autonomous robots safe, accountable, and regulation-ready.
 
 ---
 
-*© 2026 Sovereign AI Labs. Licensed under the MIT License.*
-*This white paper describes Sovereign Robotics Ops v1.0.*
+*© 2026 NOVTIA. Licensed under the MIT License.*
+*This white paper describes MoveProof v1.0.*

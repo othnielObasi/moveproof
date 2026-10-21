@@ -20,7 +20,7 @@
 
 **Narration:**
 
-> "Sovereign Robotics Ops is a three-service stack: a FastAPI backend that
+> "MoveProof is a three-service stack: a FastAPI backend that
 > runs governance logic, a Next.js frontend dashboard, and a mock robot
 > simulator. Let me walk through building and running everything."
 
@@ -81,14 +81,14 @@ cat .env.example
 docker compose build
 
 # Show the built images
-docker images | grep -E 'sovereign|sro|mock'
+docker images | grep -E 'moveproof|mock'
 ```
 
 **While building, explain:**
 
 - **Backend** (`backend/Dockerfile`): Multi-stage build — installs Python deps
   in a builder stage, then copies only the installed packages to a slim
-  runtime image. Runs as a non-root `sro` user.
+  runtime image. Runs as a non-root `moveproof` user.
 - **Frontend** (`frontend/Dockerfile`): Node 20 Alpine, installs npm deps.
   Production uses `Dockerfile.prod` with a separate build stage that bakes
   in `NEXT_PUBLIC_API_BASE`.
@@ -269,8 +269,8 @@ production updates within minutes.
 
 ```bash
 # Clone
-git clone https://github.com/othnielObasi/sovereign-robotics-ops.git
-cd sovereign-robotics-ops
+git clone https://github.com/othnielObasi/moveproof.git
+cd moveproof
 
 # Setup
 cp .env.example .env

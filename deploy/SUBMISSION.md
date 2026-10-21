@@ -2,10 +2,10 @@
 
 ## Basic Information
 
-- Project Title: Sovereign Robotics Ops
+- Project Title: MoveProof
 - Short Description: A real-time governance layer for autonomous robots that evaluates planned actions against safety policies and produces a tamper-proof decision log.
 - Long Description:
-  Sovereign Robotics Ops provides a governance layer that intercepts action proposals from an AI planner (Gemini Robotics-ER), evaluates them against configurable safety policies (geofence, human presence, speed limits, collision risk), and emits a cryptographically verifiable decision chain (SHA-256) for auditing and compliance. The stack includes a FastAPI backend, Next.js frontend (operator dashboard), and a mock simulator for testing. The project is packaged for single-VM deployment (Vultr) using `docker-compose.vultr.yml` and includes GitHub Actions to provision and configure VMs safely.
+  MoveProof provides a governance layer that intercepts action proposals from an AI planner (Gemini Robotics-ER), evaluates them against configurable safety policies (geofence, human presence, speed limits, collision risk), and emits a cryptographically verifiable decision chain (SHA-256) for auditing and compliance. The stack includes a FastAPI backend, Next.js frontend (operator dashboard), and a mock simulator for testing. The project is packaged for single-VM deployment (Vultr) using `docker-compose.vultr.yml` and includes GitHub Actions to provision and configure VMs safely.
 - Technology & Category Tags: Python, FastAPI, Next.js, Docker, Postgres, GitHub Actions, Vultr, Robotics, AI Governance
 - Final Submission Video Link (Twitter/X): https://twitter.com/yourhandle/status/REPLACE_WITH_VIDEO_ID
 
@@ -17,7 +17,7 @@
 
 ## App Hosting & Code Repository
 
-- Public GitHub Repository: https://github.com/othnielObasi/sovereign-robotics-ops
+- Public GitHub Repository: https://github.com/othnielObasi/moveproof
 - Demo Application Platform: Vultr single-VM (docker-compose), or local via Docker Compose
 - Application URL: http://<VULTR_VM_IP_OR_HOSTNAME> (replace after provisioning)
 
@@ -26,14 +26,14 @@
 - To create the submission archive (includes optional demo video):
 
 ```bash
-scripts/package_submission.sh [path/to/sro_demo.mp4]
+scripts/package_submission.sh [path/to/moveproof_demo.mp4]
 ```
 
 - To run locally for quick review:
 
 ```bash
-git clone https://github.com/othnielObasi/sovereign-robotics-ops.git
-cd sovereign-robotics-ops
+git clone https://github.com/othnielObasi/moveproof.git
+cd moveproof
 docker-compose up -d
 # Frontend: http://localhost:3000/demo
 # Backend: http://localhost:8080/docs
@@ -43,9 +43,9 @@ docker-compose up -d
 
 ```bash
 # On the target VM
-git clone https://github.com/othnielObasi/sovereign-robotics-ops.git /opt/sovereign-robotics-ops
-cd /opt/sovereign-robotics-ops
-docker compose -f docker-compose.vultr.yml --env-file /etc/sro/.env up -d --build
+git clone https://github.com/othnielObasi/moveproof.git /opt/moveproof
+cd /opt/moveproof
+docker compose -f docker-compose.vultr.yml --env-file /etc/moveproof/.env up -d --build
 ```
 
 ## Checklist (for submission)

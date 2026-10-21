@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Build backend image
-        run: docker build -t sovereign-backend ./backend
+        run: docker build -t moveproof-backend ./backend
       
       - name: Build simulator image
-        run: docker build -t sovereign-sim ./sim/mock_sim
+        run: docker build -t moveproof-sim ./sim/mock_sim

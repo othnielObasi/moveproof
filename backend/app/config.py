@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------
     # In production, MUST be set via env var JWT_SECRET
     jwt_secret: str = Field(default_factory=generate_secret)
-    jwt_issuer: str = "sro"
-    jwt_audience: str = "sro-ui"
+    jwt_issuer: str = "moveproof"
+    jwt_audience: str = "moveproof-ui"
     access_token_expire_minutes: int = 720
     jwt_algorithm: str = "HS256"
     auth_required: Optional[bool] = None  # Defaults to True in production, False elsewhere
@@ -111,7 +111,7 @@ class Settings(BaseSettings):
     # Observability
     # ------------------------------------------------------------
     otel_exporter_endpoint: Optional[str] = None
-    otel_service_name: str = "sovereign-robotics-ops"
+    otel_service_name: str = "moveproof"
     sentry_dsn: Optional[str] = None
 
     # ------------------------------------------------------------
@@ -209,5 +209,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-print(f"[DEBUG] SRO ENVIRONMENT: {settings.environment}")
+print(f"[DEBUG] MoveProof ENVIRONMENT: {settings.environment}")
 settings.validate_runtime()

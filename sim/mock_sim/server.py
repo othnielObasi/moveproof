@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="SRO Mock Simulator", version="0.1.0")
+app = FastAPI(title="MoveProof Mock Simulator", version="0.1.0")
 
 SIM_TICK_HZ = float(os.getenv("SIM_TICK_HZ", "10"))
 DT = 1.0 / max(SIM_TICK_HZ, 1.0)

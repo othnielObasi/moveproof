@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SRO — Build, API &amp; Mission Demo</title>
+<title>MoveProof — Build, API &amp; Mission Demo</title>
 <style>
   :root {
     --bg: #0d1117;
@@ -178,7 +178,7 @@
 </head>
 <body>
 
-<h1>Sovereign Robotics Ops</h1>
+<h1>MoveProof</h1>
 <p class="subtitle">Build, Swagger API &amp; Live Mission — Animated Walkthrough</p>
 
 <div class="progress-bar" id="progressBar"></div>
@@ -188,7 +188,7 @@
     <span class="dot dot-red"></span>
     <span class="dot dot-yellow"></span>
     <span class="dot dot-green"></span>
-    <span class="terminal-title" id="termTitle">sro — build demo</span>
+    <span class="terminal-title" id="termTitle">moveproof — build demo</span>
   </div>
   <div class="terminal-body" id="termBody"></div>
 </div>
@@ -205,8 +205,8 @@
 </div>
 
 <div class="footer">
-  Sovereign Robotics Ops &mdash;
-  <a href="https://github.com/othnielObasi/sovereign-robotics-ops" target="_blank">GitHub</a>
+  MoveProof &mdash;
+  <a href="https://github.com/othnielObasi/moveproof" target="_blank">GitHub</a>
 </div>
 
 <script>
@@ -275,7 +275,7 @@ const STEPS = [
       { type: "cmd", text: "cp .env.example .env" },
       { type: "comment", text: "# Key environment variables:" },
       { type: "info", text: "" },
-      { type: "highlight", text: "  DATABASE_URL        postgresql://sro:***@db:5432/sro" },
+      { type: "highlight", text: "  DATABASE_URL        postgresql://moveproof:***@db:5432/moveproof" },
       { type: "highlight", text: "  JWT_SECRET          (auto-generated in dev)" },
       { type: "highlight", text: "  SIM_TOKEN           (auto-generated in dev)" },
       { type: "highlight", text: "  POSTGRES_PASSWORD   (required for Docker Compose)" },
@@ -300,17 +300,17 @@ const STEPS = [
       { type: "comment", text: "# Building backend (multi-stage, Python 3.11-slim)..." },
       { type: "info", text: "  [builder] pip install --no-cache-dir .[postgres]" },
       { type: "info", text: "  [runtime] COPY packages from builder" },
-      { type: "info", text: "  [runtime] USER sro (non-root)" },
-      { type: "ok", text: "  ✔ sovereign-robotics-ops-backend   253 MB" },
+      { type: "info", text: "  [runtime] USER moveproof (non-root)" },
+      { type: "ok", text: "  ✔ moveproof-backend   253 MB" },
       { type: "info", text: "" },
       { type: "comment", text: "# Building frontend (Node 20 Alpine)..." },
       { type: "info", text: "  npm install → copy source" },
-      { type: "ok", text: "  ✔ sovereign-robotics-ops-frontend  704 MB" },
+      { type: "ok", text: "  ✔ moveproof-frontend  704 MB" },
       { type: "info", text: "" },
       { type: "comment", text: "# Building simulator (Python 3.11-slim)..." },
       { type: "info", text: "  pip install fastapi uvicorn pydantic" },
       { type: "info", text: "  USER sim (non-root)" },
-      { type: "ok", text: "  ✔ sovereign-robotics-ops-mock-sim  171 MB" },
+      { type: "ok", text: "  ✔ moveproof-mock-sim  171 MB" },
       { type: "info", text: "" },
       { type: "ok", text: "  All 3 images built successfully." },
     ]
@@ -322,11 +322,11 @@ const STEPS = [
       { type: "banner", text: "━━━  5 / 12  —  Start the Stack  ━━━" },
       { type: "cmd", text: "docker compose up -d" },
       { type: "info", text: "" },
-      { type: "ok", text: "  ✔ Network sovereign-robotics-ops_default     Created" },
-      { type: "ok", text: "  ✔ Container sro-postgres-1                   Started" },
-      { type: "ok", text: "  ✔ Container sro-mock-sim-1                   Started" },
-      { type: "ok", text: "  ✔ Container sro-backend-1                    Started" },
-      { type: "ok", text: "  ✔ Container sro-frontend-1                   Started" },
+      { type: "ok", text: "  ✔ Network moveproof_default     Created" },
+      { type: "ok", text: "  ✔ Container moveproof-postgres-1                   Started" },
+      { type: "ok", text: "  ✔ Container moveproof-mock-sim-1                   Started" },
+      { type: "ok", text: "  ✔ Container moveproof-backend-1                    Started" },
+      { type: "ok", text: "  ✔ Container moveproof-frontend-1                   Started" },
       { type: "info", text: "" },
       { type: "comment", text: "# Backend runs Alembic migrations on startup automatically" },
       { type: "info", text: "  preflight: creating data directory..." },
@@ -438,7 +438,7 @@ const STEPS = [
       { type: "cmd", text: "open http://localhost:8080/docs" },
       { type: "info", text: "" },
       { type: "highlight", text: "  ┌─────────────────────────────────────────────────┐" },
-      { type: "highlight", text: "  │  Sovereign Robotics Ops API  v0.1.0             │" },
+      { type: "highlight", text: "  │  MoveProof API  v0.1.0             │" },
       { type: "highlight", text: "  └─────────────────────────────────────────────────┘" },
       { type: "info", text: "" },
       { type: "comment", text: "# Endpoint groups:" },
@@ -645,7 +645,7 @@ function showStep(stepIdx, animate) {
   currentStep = stepIdx;
   lineIndex = 0;
   body.innerHTML = "";
-  title.textContent = `sro — ${STEPS[stepIdx].title}`;
+  title.textContent = `moveproof — ${STEPS[stepIdx].title}`;
   updateProgress();
 
   if (animate) {

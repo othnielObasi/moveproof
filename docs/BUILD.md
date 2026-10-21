@@ -1,6 +1,6 @@
 # Build & Deployment Guide
 
-> Sovereign Robotics Ops (SRO) — an autonomous robotics governance platform.
+> MoveProof — an autonomous robotics governance platform.
 
 This document covers every way to build, run, and deploy the project: local
 development, Docker Compose, Vultr production, and the Fly.io + Vercel
@@ -82,7 +82,7 @@ cp .env.example .env
 
 | Variable             | Description                                    | Example                          |
 |----------------------|------------------------------------------------|----------------------------------|
-| `DATABASE_URL`       | PostgreSQL connection string                   | `postgresql://sro:secret@db:5432/sro` |
+| `DATABASE_URL`       | PostgreSQL connection string                   | `postgresql://moveproof:secret@db:5432/moveproof` |
 | `JWT_SECRET`         | Secret key for JWT token signing               | *(auto-generated in dev)*        |
 | `SIM_TOKEN`          | Shared auth token for simulator API            | *(auto-generated in dev)*        |
 | `POSTGRES_PASSWORD`  | PostgreSQL password (Docker Compose only)       | `changeme`                       |
@@ -111,8 +111,8 @@ The fastest way to get everything running:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/othnielObasi/sovereign-robotics-ops.git
-cd sovereign-robotics-ops
+git clone https://github.com/othnielObasi/moveproof.git
+cd moveproof
 
 # 2. Create your .env file
 cp .env.example .env
@@ -228,14 +228,14 @@ SSH into the VM and run the deploy script:
 
 ```bash
 ssh root@<VM_IP>
-cd /opt/sro
+cd /opt/moveproof
 git pull origin main
 bash deploy/vultr-deploy.sh
 ```
 
 The deploy script handles:
 1. Repository clone / update
-2. Environment file creation (`/etc/sro/.env`)
+2. Environment file creation (`/etc/moveproof/.env`)
 3. Firewall configuration (ports 80, 443)
 4. Docker Compose build and launch
 5. Nginx reverse proxy configuration
@@ -282,7 +282,7 @@ via [Honcho](https://github.com/nickstenning/honcho) (see `Procfile`).
 
 ```bash
 # One-time setup
-fly launch --name sovereign-robotics-ops --region lhr
+fly launch --name moveproof --region lhr
 
 # Set secrets
 fly secrets set \
@@ -320,7 +320,7 @@ The `deploy.yml` workflow deploys both on each push to `main`:
 | Environment   | Engine       | Connection String                        |
 |---------------|-------------|------------------------------------------|
 | Development   | SQLite       | `sqlite:///./data/app.db` (default)      |
-| Production    | PostgreSQL 16| `postgresql://sro:<pw>@db:5432/sro`      |
+| Production    | PostgreSQL 16| `postgresql://moveproof:<pw>@db:5432/moveproof`      |
 
 Set `DATABASE_URL` to switch engines. The ORM layer (SQLAlchemy) abstracts
 the difference.
@@ -353,7 +353,7 @@ alembic upgrade head
 The Vultr deploy script installs a daily cron job:
 
 ```
-0 3 * * * docker exec sro-db pg_dump -U sro sro | gzip > /opt/sro/backups/sro-$(date +\%Y\%m\%d).sql.gz
+0 3 * * * docker exec moveproof-db pg_dump -U moveproof moveproof | gzip > /opt/moveproof/backups/moveproof-$(date +\%Y\%m\%d).sql.gz
 ```
 
 Backups are retained for 7 days.

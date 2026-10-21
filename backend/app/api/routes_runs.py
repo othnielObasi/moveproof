@@ -23,7 +23,7 @@ logger = logging.getLogger("app.routes_runs")
 
 
 def _review_mission_plan(goal: dict, waypoints: list, plan_source: str) -> dict:
-    """Mission-level governance gate: Sovereign reviews the plan before execution.
+    """Mission-level governance gate: MoveProof reviews the plan before execution.
 
     Checks:
     - Goal within geofence
@@ -110,7 +110,7 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
     persisted.  This task:
     1. Attempts LLM plan generation (with a timeout).
     2. If successful, replaces the seed plan with the LLM plan.
-    3. Sovereign validates the plan (mission-level governance gate).
+    3. MoveProof validates the plan (mission-level governance gate).
     4. Transitions the run from 'planning' to 'running' and launches the loop.
 
     The robot does NOT move until this task calls begin_running().
@@ -179,11 +179,11 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
                     "data": {"step": "llm_skip", "message": "No LLM planner configured — using fallback plan", "source": "fallback"},
                 })
 
-        # --- Mission-level governance gate: Sovereign reviews the plan ---
+        # --- Mission-level governance gate: MoveProof reviews the plan ---
         if svc._ws_broadcast:
             await svc._ws_broadcast(run_id, {
                 "kind": "planning_progress",
-                "data": {"step": "governance_start", "message": "Sovereign reviewing plan for safety compliance…"},
+                "data": {"step": "governance_start", "message": "MoveProof reviewing plan for safety compliance…"},
             })
         plan_wps = svc._plans.get(run_id, [])
         mission_review = _review_mission_plan(goal, plan_wps, plan_source)
@@ -207,7 +207,7 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
                 if m:
                     m.status = "failed"
                 db.commit()
-            logger.warning("Run %s: mission BLOCKED by Sovereign — %s", run_id, mission_review["reasons"])
+            logger.warning("Run %s: mission BLOCKED by MoveProof — %s", run_id, mission_review["reasons"])
             if svc._ws_broadcast:
                 await svc._ws_broadcast(run_id, {"kind": "status", "data": {"status": "failed", "reason": "Mission blocked by governance"}})
             return

@@ -167,7 +167,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
       setEvents(rows);
 
       // Auto-populate llmPlan from backend PLAN events.  Always prefer the
-      // latest LLM plan (source: "gemini") over a seed fallback so the map
+      // latest LLM plan (source: "nemotron" / "gemini") over a seed fallback so the map
       // shows the plan the robot is *actually* following — even if a seed
       // fallback was loaded first.
       const planEvents = rows.filter((e: any) => e.type === "PLAN");
@@ -513,7 +513,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
     return dec?.payload || null;
   }, [events]);
 
-  // Extract MISSION_REVIEW from events (Sovereign's plan approval)
+  // Extract MISSION_REVIEW from events (MoveProof's plan approval)
   useEffect(() => {
     const review = events.find((e: any) => e.type === "MISSION_REVIEW");
     if (review) {
@@ -651,7 +651,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
           }`}>
             {llmPlan?.all_approved === true ? "All Approved" :
              llmPlan?.all_approved === false ? "Constrained" :
-             llmPlan && missionReview?.verdict === "APPROVED" ? "Sovereign Approved" :
+             llmPlan && missionReview?.verdict === "APPROVED" ? "MoveProof Approved" :
              llmPlan ? "Under Review" :
              pipelineStage === "reasoning" || pipelineStage === "planning" ? "Working…" : "Idle"}
           </span>
@@ -837,7 +837,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
                     {currentStatus === "planning"
-                      ? "The Gemini LLM is computing an optimal multi-waypoint plan. The robot will not move until planning and governance review complete."
+                      ? "The Nemotron planner is computing an optimal multi-waypoint plan. The robot will not move until planning and governance review complete."
                       : "The robot is following the approved plan. Watch the map and chain-of-trust below for live progress."}
                   </div>
                 </div>
@@ -1181,11 +1181,11 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   <div className="text-[10px] text-slate-600 italic">High planner confidence ≠ safe execution — governance overrides unsafe plans regardless of confidence</div>
                 </div>
 
-                {/* Sovereign Checks from MISSION_REVIEW */}
+                {/* MoveProof Checks from MISSION_REVIEW */}
                 {missionReview && missionReview.verdict === "APPROVED" && (
                   <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-2.5 space-y-1">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-green-400 font-semibold text-[10px] uppercase tracking-wider">Sovereign Checks Passed</span>
+                      <span className="text-green-400 font-semibold text-[10px] uppercase tracking-wider">MoveProof Checks Passed</span>
                       <span className="text-[10px] text-green-400/60 font-mono">{missionReview.checks_passed?.length || 0} checks · {missionReview.waypoint_count || 0} waypoints</span>
                     </div>
                     {(missionReview.checks_passed || []).map((check: string, i: number) => (
@@ -1205,7 +1205,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 )}
                 {missionReview && missionReview.verdict === "BLOCKED" && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 space-y-1">
-                    <div className="text-red-400 font-semibold text-[10px] uppercase tracking-wider">Sovereign Blocked</div>
+                    <div className="text-red-400 font-semibold text-[10px] uppercase tracking-wider">MoveProof Blocked</div>
                     {(missionReview.reasons || []).map((r: string, i: number) => (
                       <div key={i} className="text-[10px] text-red-300">• {r}</div>
                     ))}
@@ -1232,7 +1232,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   <div className="flex flex-col items-center text-center border-x border-slate-700/50">
                     <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Governance Result</span>
                     <span className={`text-[11px] font-bold ${llmPlan.all_approved === false ? "text-cyan-400" : "text-green-400"}`}>
-                      {llmPlan.all_approved === false ? "Approved with Constraints" : missionReview?.verdict === "APPROVED" ? "Sovereign Approved" : "Approved"}
+                      {llmPlan.all_approved === false ? "Approved with Constraints" : missionReview?.verdict === "APPROVED" ? "MoveProof Approved" : "Approved"}
                     </span>
                   </div>
                   <div className="flex flex-col items-center text-center">
@@ -1253,7 +1253,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${llmPlan.all_approved === false ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                    {llmPlan.all_approved === true ? "All Approved" : llmPlan.all_approved === false ? "Flagged" : missionReview?.verdict === "APPROVED" ? "Sovereign Approved" : "Under Review"}
+                    {llmPlan.all_approved === true ? "All Approved" : llmPlan.all_approved === false ? "Flagged" : missionReview?.verdict === "APPROVED" ? "MoveProof Approved" : "Under Review"}
                   </span>
                   <span className="text-[10px] text-slate-500">{llmPlan.waypoints?.length || 0} waypoints</span>
                   <span className="text-[10px] text-purple-400">{llmPlan.rationale}</span>
@@ -1541,7 +1541,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
               <div className="space-y-1.5 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${llmPlan.all_approved === false ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                    {llmPlan.all_approved === true ? "All Approved" : llmPlan.all_approved === false ? "Flagged" : missionReview?.verdict === "APPROVED" ? "Sovereign Approved" : "Under Review"}
+                    {llmPlan.all_approved === true ? "All Approved" : llmPlan.all_approved === false ? "Flagged" : missionReview?.verdict === "APPROVED" ? "MoveProof Approved" : "Under Review"}
                   </span>
                   <span className="text-[9px] text-slate-500">{llmPlan.waypoints?.length || 0} waypoints</span>
                 </div>

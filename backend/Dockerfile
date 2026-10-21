@@ -11,7 +11,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN groupadd -r sro && useradd -r -g sro -d /app -s /sbin/nologin sro
+RUN groupadd -r moveproof && useradd -r -g moveproof -d /app -s /sbin/nologin moveproof
 
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
@@ -20,9 +20,9 @@ COPY pyproject.toml /app/pyproject.toml
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
 COPY app /app/app
-RUN mkdir -p /app/data && chown -R sro:sro /app/data
+RUN mkdir -p /app/data && chown -R moveproof:moveproof /app/data
 
-USER sro
+USER moveproof
 
 EXPOSE 8080
 

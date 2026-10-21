@@ -43,8 +43,8 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 # Clone repo and run deploy script
-REPO="https://github.com/othnielObasi/sovereign-robotics-ops.git"
-APP_DIR="/opt/sovereign-robotics-ops"
+REPO="https://github.com/othnielObasi/moveproof.git"
+APP_DIR="/opt/moveproof"
 if [ -d "$APP_DIR" ]; then
   cd "$APP_DIR" && git fetch origin main && git reset --hard origin/main
 else
@@ -69,7 +69,7 @@ payload = {
   'region': region,
   'plan': plan,
   'image': image,
-  'label': 'sro-backend-{}'.format(__import__('time').time()),
+  'label': 'moveproof-backend-{}'.format(__import__('time').time()),
   'user_data': user_data
 }
 print(json.dumps(payload))

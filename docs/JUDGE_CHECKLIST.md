@@ -1,4 +1,4 @@
-Judge Checklist — Sovereign Robotics Ops
+Judge Checklist — MoveProof
 
 - [ ] Deployment
   - Frontend and backend reachable; API docs accessible at `/docs`.

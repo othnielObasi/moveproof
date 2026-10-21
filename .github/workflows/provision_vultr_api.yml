@@ -40,7 +40,7 @@ jobs:
           set -euo pipefail
 
           # write env file for app (do NOT echo secrets to logs)
-          cat > /etc/sro/.env <<'EOV'
+          cat > /etc/moveproof/.env <<'EOV'
           GEMINI_API_KEY=${GEMINI_API_KEY}
           GEMINI_PROJECT_ID=${GEMINI_PROJECT_ID}
           JWT_SECRET=${JWT_SECRET}
@@ -49,8 +49,8 @@ jobs:
           POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
           EOV
 
-          chown root:root /etc/sro/.env
-          chmod 600 /etc/sro/.env
+          chown root:root /etc/moveproof/.env
+          chmod 600 /etc/moveproof/.env
 
           # install docker & docker-compose if missing (idempotent)
           apt-get update -y
@@ -63,11 +63,11 @@ jobs:
           apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
           # clone repo and start services
-          if [ ! -d /opt/sovereign-robotics-ops ]; then
-            git clone https://github.com/othnielObasi/sovereign-robotics-ops.git /opt/sovereign-robotics-ops
+          if [ ! -d /opt/moveproof ]; then
+            git clone https://github.com/othnielObasi/moveproof.git /opt/moveproof
           fi
-          cd /opt/sovereign-robotics-ops
-          docker compose -f docker-compose.vultr.yml --env-file /etc/sro/.env up -d --build
+          cd /opt/moveproof
+          docker compose -f docker-compose.vultr.yml --env-file /etc/moveproof/.env up -d --build
 
           EOF
 
@@ -89,7 +89,7 @@ jobs:
           CREATE_RESP=$(curl -s -X POST "https://api.vultr.com/v2/instances" \
             -H "Authorization: Bearer $VULTR_API_KEY" \
             -H "Content-Type: application/json" \
-            -d '{"region":"'"$REGION"'","plan":"'"$PLAN"'","image":"'"$IMAGE"'","label":"sro-'"$(date +%s)"'","user_data":"'"$USERDATA"'"}')
+            -d '{"region":"'"$REGION"'","plan":"'"$PLAN"'","image":"'"$IMAGE"'","label":"moveproof-'"$(date +%s)"'","user_data":"'"$USERDATA"'"}')
 
           echo "$CREATE_RESP" > create_resp.json
           echo "Create response saved to create_resp.json"

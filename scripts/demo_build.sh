@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────
-# SRO Build Demo — Interactive Terminal Script
+# MoveProof Build Demo — Interactive Terminal Script
 #
 # Records a self-paced walkthrough of the entire build pipeline.
 # Designed for use with a screen recorder (OBS / Loom) or asciinema:
 #
-#   asciinema rec -t "SRO Build Demo" sro-build-demo.cast
+#   asciinema rec -t "MoveProof Build Demo" moveproof-build-demo.cast
 #   bash scripts/demo_build.sh
 #
 # Each step pauses and waits for ENTER so you control the pacing.
@@ -50,7 +50,7 @@ pause() {
 # ── intro ────────────────────────────────────────────────────────────
 
 clear
-banner "Sovereign Robotics Ops — Build & Deploy Demo"
+banner "MoveProof — Build & Deploy Demo"
 echo ""
 echo "  This walkthrough covers:"
 echo "    1. Project structure"
@@ -69,7 +69,7 @@ pause
 
 banner "1 / 8 — Project Structure"
 narrate "Three services: backend (FastAPI), frontend (Next.js), simulator (FastAPI)"
-run_cmd "tree -L 2 --dirsfirst -I 'node_modules|__pycache__|.git|*.egg-info|.next|sro_backend*' | head -50"
+run_cmd "tree -L 2 --dirsfirst -I 'node_modules|__pycache__|.git|*.egg-info|.next|moveproof_backend*' | head -50"
 pause
 
 # ── 2. environment ──────────────────────────────────────────────────

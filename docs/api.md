@@ -1,6 +1,6 @@
 # API Reference
 
-Base URL: `http://localhost:8080` (local) or `https://sovereignroboticsops.nov-tia.com` (production)
+Base URL: `http://localhost:8080` (local) or `https://moveproof.nov-tia.com` (production)
 
 Interactive docs: `{base}/docs` (Swagger UI) or `{base}/redoc` (ReDoc)
 

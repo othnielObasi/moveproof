@@ -1,11 +1,11 @@
 # Developer Guide (internal)
 
-This document is the developer handbook for Sovereign Robotics Ops. It contains architecture details, run lifecycle,
+This document is the developer handbook for MoveProof. It contains architecture details, run lifecycle,
 deployment and CI instructions, and guidance for maintainers and automation.
 
 ## Project Overview
 
-**Sovereign Robotics Ops** is a real-time governance layer for autonomous
+**MoveProof** is a real-time governance layer for autonomous
 robots. The system intercepts AI-planned actions (from Gemini Robotics-ER 1.5),
 evaluates them against safety policies, and approves/denies/modifies execution.
 
@@ -22,7 +22,7 @@ automation.
 ### CI / Provisioning Workflows
 
 - Workflows live in `.github/workflows/`:
-  - `provision_vultr_env.yml` — writes `/etc/sro/.env` on an existing VM via SSH
+  - `provision_vultr_env.yml` — writes `/etc/moveproof/.env` on an existing VM via SSH
   - `provision_vultr_api.yml` — creates a new Vultr instance using the Vultr API
     and a `user_data` startup script (requires `VULTR_API_KEY` in GitHub Secrets)
 - Use the Actions UI to `Run workflow` when CLI dispatch returns HTTP 403.
@@ -31,7 +31,7 @@ automation.
 
 ### Secrets and Runtime
 
-- Runtime secrets are written to `/etc/sro/.env` on the VM (owner `root:root`,
+- Runtime secrets are written to `/etc/moveproof/.env` on the VM (owner `root:root`,
   mode `600`).
 - Do NOT commit long-lived secrets into the repo. Use GitHub Secrets for
   provisioning and rotate keys after deployment.

@@ -62,7 +62,7 @@ def init_database(max_retries: int = 5, retry_delay: int = 2):
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     # Startup
-    logger.info(f"🚀 Starting Sovereign Robotics Ops API")
+    logger.info(f"🚀 Starting MoveProof API")
     logger.info(f"   Environment: {settings.environment}")
     logger.info(f"   Planner: {settings.planner_provider} (Nemotron: {'on' if settings.nemotron_configured else 'off'}, Gemini: {'on' if settings.gemini_configured else 'off'})")
     
@@ -122,7 +122,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Sovereign Robotics Ops API",
+    title="MoveProof API",
     version="0.1.0",
     lifespan=lifespan,
     docs_url="/docs" if settings.docs_enabled else None,
@@ -136,7 +136,7 @@ app.state.rate_limiter = InMemoryRateLimiter()
 @app.get("/")
 def root():
     return {
-        "name": "Sovereign Robotics Ops API",
+        "name": "MoveProof API",
         "status": "ok",
         "docs": "/docs" if settings.docs_enabled else None,
         "health": "/health"

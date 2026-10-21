@@ -1,5 +1,5 @@
 {
-  "name": "sovereign-robotics-ops",
+  "name": "moveproof",
   "version": "1.0.0",
   "description": "> **Track 1: Autonomous Robotics Control in Simulation** >  > The governance layer for autonomous robot control. We're not building the robot brain — we're building the **robot conscience**.",
   "main": "index.js",
@@ -12,16 +12,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/othnielObasi/sovereign-robotics-ops.git"
+    "url": "git+https://github.com/othnielObasi/moveproof.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/othnielObasi/sovereign-robotics-ops/issues"
+    "url": "https://github.com/othnielObasi/moveproof/issues"
   },
-  "homepage": "https://github.com/othnielObasi/sovereign-robotics-ops#readme",
+  "homepage": "https://github.com/othnielObasi/moveproof#readme",
   "devDependencies": {
     "playwright": "^1.41.0"
   }

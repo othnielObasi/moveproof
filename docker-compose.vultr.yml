@@ -54,10 +54,10 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     environment:
-      DATABASE_URL: "postgresql://sro:${POSTGRES_PASSWORD}@db:5432/sro"
+      DATABASE_URL: "postgresql://moveproof:${POSTGRES_PASSWORD}@db:5432/moveproof"
       ENVIRONMENT: "production"
       API_DOCS_ENABLED: "true"
-      CORS_ORIGINS: "https://sovereignroboticsops.nov-tia.com"
+      CORS_ORIGINS: "https://moveproof.nov-tia.com"
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
       GEMINI_PROJECT_ID: "${GEMINI_PROJECT_ID}"
       GEMINI_ENABLED: "true"
@@ -98,12 +98,12 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     environment:
-      POSTGRES_USER: sro
+      POSTGRES_USER: moveproof
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-      POSTGRES_DB: sro
+      POSTGRES_DB: moveproof
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sro -d sro"]
+      test: ["CMD-SHELL", "pg_isready -U moveproof -d moveproof"]
       interval: 10s
       timeout: 3s
       retries: 5

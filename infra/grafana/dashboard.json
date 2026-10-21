@@ -1,7 +1,7 @@
 {
   "dashboard": {
-    "title": "Sovereign Robotics Ops",
-    "uid": "sovereign-robotics",
+    "title": "MoveProof",
+    "uid": "moveproof",
     "panels": [
       {
         "id": 1,

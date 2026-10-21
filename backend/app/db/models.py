@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""SQLAlchemy ORM models — the persistent data model for SRO.
+"""SQLAlchemy ORM models — the persistent data model for MoveProof.
 
 Key entities:
 - **Mission** — a high-level delivery/patrol objective.

@@ -1,4 +1,4 @@
-# Sovereign Robotics Ops — Product Overview
+# MoveProof — Product Overview
 
 ## One-line
 
@@ -10,14 +10,14 @@ Autonomous mobile robots (AMRs) in warehouses and factories operate without a co
 
 ## Solution
 
-Sovereign Robotics Ops is middleware that intercepts every AI-generated action before execution, evaluates it against configurable safety policies, and produces cryptographically verifiable proof of every decision.
+MoveProof is middleware that intercepts every AI-generated action before execution, evaluates it against configurable safety policies, and produces cryptographically verifiable proof of every decision.
 
 **It is not a robot brain. It is the robot's compliance officer.**
 
 ## How It Works
 
 ```
-AI Planner → Sovereign evaluates → APPROVED / DENIED / ESCALATED → Execute or Block
+AI Planner → MoveProof evaluates → APPROVED / DENIED / ESCALATED → Execute or Block
                                           ↓
                              Hash-chained audit event stored
                              Governance receipt generated
@@ -33,7 +33,7 @@ Every 100ms during a mission:
 
 ## Key Differentiators
 
-| Feature | Sovereign | Traditional Monitoring |
+| Feature | MoveProof | Traditional Monitoring |
 |---|---|---|
 | Enforcement timing | Before execution (preventive) | After execution (reactive) |
 | Audit integrity | SHA-256 hash chain (tamper-proof) | Log files (mutable) |
@@ -65,8 +65,8 @@ Every 100ms during a mission:
 
 ## Team
 
-**Sovereign AI Labs** — Othniel Obasi, Founder & CEO
+**NOVTIA** — Othniel Obasi, Founder & CEO
 
 ## Contact
 
-GitHub: [sovereign-robotics-ops](https://github.com/othnielObasi/sovereign-robotics-ops)
+GitHub: [moveproof](https://github.com/othnielObasi/moveproof)

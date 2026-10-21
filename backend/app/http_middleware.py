@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""HTTP middleware stack for the SRO backend.
+"""HTTP middleware stack for the MoveProof backend.
 
 Provides two middleware classes:
 

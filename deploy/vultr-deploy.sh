@@ -2,18 +2,18 @@
 set -euo pipefail
 
 # ============================================================
-# Sovereign Robotics Ops - Vultr Deployment Script
+# MoveProof - Vultr Deployment Script
 # Run this on the Vultr VM as root
 # ============================================================
 
-REPO_URL="https://github.com/othnielObasi/sovereign-robotics-ops.git"
-APP_DIR="/opt/sovereign-robotics-ops"
-ENV_FILE="/etc/sro/.env"
+REPO_URL="https://github.com/othnielObasi/moveproof.git"
+APP_DIR="/opt/moveproof"
+ENV_FILE="/etc/moveproof/.env"
 
-echo "=== Sovereign Robotics Ops - Vultr Deploy ==="
+echo "=== MoveProof - Vultr Deploy ==="
 
 # ---- Domain config (override via first argument) ----
-DOMAIN="${1:-sovereignroboticsops.nov-tia.com}"
+DOMAIN="${1:-moveproof.nov-tia.com}"
 ADMIN_EMAIL="${2:-admin@nov-tia.com}"
 
 # ---- Clone or update repo ----
@@ -29,7 +29,7 @@ else
 fi
 
 # ---- Load or create env file ----
-mkdir -p /etc/sro || { echo "ERROR: Failed to create /etc/sro"; exit 1; }
+mkdir -p /etc/moveproof || { echo "ERROR: Failed to create /etc/moveproof"; exit 1; }
 
 if [ -f "$ENV_FILE" ]; then
   echo "Using existing env file at $ENV_FILE"
@@ -76,7 +76,7 @@ for i in $(seq 1 30); do
 done
 
 # ---- Set up Nginx reverse proxy ----
-cat > /etc/nginx/sites-available/sro <<NGINX
+cat > /etc/nginx/sites-available/moveproof <<NGINX
 server {
     listen 80;
     server_name ${DOMAIN};
@@ -130,7 +130,7 @@ server {
 NGINX
 
 rm -f /etc/nginx/sites-enabled/default
-ln -sf /etc/nginx/sites-available/sro /etc/nginx/sites-enabled/sro
+ln -sf /etc/nginx/sites-available/moveproof /etc/nginx/sites-enabled/moveproof
 nginx -t && systemctl reload nginx
 
 # ---- Install Certbot and obtain SSL certificate ----
@@ -139,26 +139,26 @@ apt-get install -y certbot python3-certbot-nginx
 certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos --redirect -m "${ADMIN_EMAIL}"
 
 # ---- After certbot rewrites the config, inject HSTS ----
-if ! grep -q "Strict-Transport-Security" /etc/nginx/sites-available/sro; then
+if ! grep -q "Strict-Transport-Security" /etc/nginx/sites-available/moveproof; then
   sed -i '/listen 443 ssl/a\    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;' \
-    /etc/nginx/sites-available/sro 2>/dev/null || true
+    /etc/nginx/sites-available/moveproof 2>/dev/null || true
   nginx -t && systemctl reload nginx
 fi
 
 # ---- Set up daily database backup cron ----
-BACKUP_DIR="/var/backups/sro-postgres"
+BACKUP_DIR="/var/backups/moveproof-postgres"
 mkdir -p "$BACKUP_DIR"
-cat > /etc/cron.daily/sro-db-backup <<'CRON'
+cat > /etc/cron.daily/moveproof-db-backup <<'CRON'
 #!/bin/bash
 set -euo pipefail
-BACKUP_DIR="/var/backups/sro-postgres"
+BACKUP_DIR="/var/backups/moveproof-postgres"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-docker compose -f /opt/sovereign-robotics-ops/docker-compose.vultr.yml exec -T db \
-  pg_dump -U sro -d sro | gzip > "${BACKUP_DIR}/sro_${TIMESTAMP}.sql.gz"
+docker compose -f /opt/moveproof/docker-compose.vultr.yml exec -T db \
+  pg_dump -U moveproof -d moveproof | gzip > "${BACKUP_DIR}/moveproof_${TIMESTAMP}.sql.gz"
 # Keep only last 7 days of backups
-find "$BACKUP_DIR" -name "sro_*.sql.gz" -mtime +7 -delete
+find "$BACKUP_DIR" -name "moveproof_*.sql.gz" -mtime +7 -delete
 CRON
-chmod +x /etc/cron.daily/sro-db-backup
+chmod +x /etc/cron.daily/moveproof-db-backup
 
 echo ""
 echo "=============================================="

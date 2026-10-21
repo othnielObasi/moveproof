@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -i /tmp/vultr_key $VM_USER@$VM_IP '
-            test -f /etc/sro/.env
+            test -f /etc/moveproof/.env
           '
 
       - name: Deploy / restart services on VM
@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -i /tmp/vultr_key $VM_USER@$VM_IP '
-            cd /opt/sovereign-robotics-ops || exit 1
+            cd /opt/moveproof || exit 1
             sudo git fetch origin main
             sudo git reset --hard origin/main
             sudo bash deploy/vultr-deploy.sh
@@ -50,8 +50,8 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -i /tmp/vultr_key $VM_USER@$VM_IP '
-            cd /opt/sovereign-robotics-ops || exit 1
-            sudo docker compose --env-file /etc/sro/.env -f docker-compose.vultr.yml run --rm backend python -m app.preflight
+            cd /opt/moveproof || exit 1
+            sudo docker compose --env-file /etc/moveproof/.env -f docker-compose.vultr.yml run --rm backend python -m app.preflight
           '
 
       - name: Health check

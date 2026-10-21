@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sro-backend"
+name = "moveproof-backend"
 version = "0.1.0"
-description = "Sovereign Robotics Ops - backend (FastAPI)"
+description = "MoveProof - backend (FastAPI)"
 requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.111.0",

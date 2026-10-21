@@ -13,7 +13,7 @@ frontend
 ```
 3. Environment variables:
 ```
-NEXT_PUBLIC_API_BASE=https://sro-ops.fly.dev
+NEXT_PUBLIC_API_BASE=https://moveproof-ops.fly.dev
 ```
 4. Hit Deploy.
 

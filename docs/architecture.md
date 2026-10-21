@@ -2,7 +2,7 @@
 
 ## System Overview
 
-Sovereign Robotics Ops is a runtime governance layer for autonomous robots. It intercepts every AI-generated action, evaluates it against safety policies, and produces a cryptographic audit trail of every decision.
+MoveProof is a runtime governance layer for autonomous robots. It intercepts every AI-generated action, evaluates it against safety policies, and produces a cryptographic audit trail of every decision.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

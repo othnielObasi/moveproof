@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: sro
-      POSTGRES_PASSWORD: sro
-      POSTGRES_DB: sro
+      POSTGRES_USER: moveproof
+      POSTGRES_PASSWORD: moveproof
+      POSTGRES_DB: moveproof
     ports:
       - "5432:5432"
     volumes:
@@ -16,7 +16,7 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: "postgresql://sro:sro@postgres:5432/sro"
+      DATABASE_URL: "postgresql://moveproof:moveproof@postgres:5432/moveproof"
       SIM_BASE_URL: "http://mock-sim:8090"
       CORS_ORIGINS: "http://localhost:3000"
     ports:
