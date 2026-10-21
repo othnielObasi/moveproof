@@ -11,6 +11,8 @@ from app.policies.rules_python import evaluate_policies
 from app.db.models import GovernanceDecisionRecord, CircuitBreakerState
 from app.utils.time import utc_now
 from app.policies.versioning import policy_version_hash
+from app.policies.params import active_params, params_hash
+from app.utils import signing
 
 logger = logging.getLogger("app.governance")
 
@@ -75,7 +77,9 @@ class GovernanceEngine:
         event_hash: Optional[str] = None,
     ) -> GovernanceDecision:
         """Evaluate a proposal, persist the decision, and handle escalation logic."""
-        decision = evaluate_policies(telemetry, proposal)
+        # Pin the rules for this decision so the recorded version is exactly what was enforced
+        params = active_params()
+        decision = evaluate_policies(telemetry, proposal, params)
 
         # Circuit-breaker: track consecutive denials (persistent)
         escalated = False
@@ -107,12 +111,21 @@ class GovernanceEngine:
             "human_detected": bool(telemetry.get("human_detected", False)),
             "human_distance_m": round(float(telemetry.get("human_distance_m", 999)), 2),
             "nearest_obstacle_m": round(float(telemetry.get("nearest_obstacle_m", 999)), 2),
+            # Kept so a decision can be replayed exactly under candidate rules
+            "human_conf": round(float(telemetry.get("human_conf", 0.0)), 3),
+            "walking_humans": [
+                {"x": round(float(w.get("x", 0)), 2), "y": round(float(w.get("y", 0)), 2),
+                 "conf": round(float(w.get("conf", 0.9)), 3)}
+                for w in (telemetry.get("walking_humans") or [])[:10]
+                if isinstance(w, dict)
+            ],
         }
 
         # Persist decision record
+        ts = utc_now()
         record = GovernanceDecisionRecord(
             run_id=run_id,
-            ts=utc_now(),
+            ts=ts,
             decision=decision.decision,
             policy_state=decision.policy_state,
             risk_score=decision.risk_score,
@@ -125,11 +138,51 @@ class GovernanceEngine:
             was_executed="true" if was_executed else "false",
             event_hash=event_hash,
             escalated="true" if escalated else "false",
-            policy_version=policy_version_hash(),
+            policy_version=params_hash(params),
         )
+        try:
+            record.signature, record.signing_key_id = signing.sign(self.signing_payload(record))
+        except Exception as e:  # signing must never block the safety decision itself
+            logger.error("Receipt signing failed for run %s: %s", run_id, e)
         db.add(record)
 
         return decision
+
+    @staticmethod
+    def signing_payload(record: GovernanceDecisionRecord) -> Dict[str, Any]:
+        """The decision content covered by the signature: what was proposed, what the
+        gate saw, under which rules, and what it decided. `was_executed` and
+        `event_hash` are set after the decision and are covered by the hash chain instead."""
+        return {
+            "run_id": record.run_id,
+            "ts": signing.canonical_ts(record.ts),
+            "decision": record.decision,
+            "policy_state": record.policy_state,
+            "risk_score": record.risk_score,
+            "policy_hits": json.loads(record.policy_hits or "[]"),
+            "reasons": json.loads(record.reasons or "[]"),
+            "required_action": record.required_action,
+            "proposal_intent": record.proposal_intent,
+            "proposal": json.loads(record.proposal_json or "{}"),
+            "telemetry": json.loads(record.telemetry_summary or "{}"),
+            "escalated": record.escalated,
+            "policy_version": record.policy_version,
+        }
+
+    def verify_receipt(self, db: Session, run_id: str, decision_id: int) -> Optional[Dict[str, Any]]:
+        record = (
+            db.query(GovernanceDecisionRecord)
+            .filter(GovernanceDecisionRecord.run_id == run_id, GovernanceDecisionRecord.id == decision_id)
+            .first()
+        )
+        if not record:
+            return None
+        if not record.signature:
+            return {"receipt_id": record.id, "signed": False, "valid": False,
+                    "reason": "decision recorded before receipt signing was enabled"}
+        result = signing.verify(self.signing_payload(record), record.signature, record.signing_key_id or "")
+        return {"receipt_id": record.id, "signed": True, "key_id": record.signing_key_id,
+                "algorithm": signing.SIGNATURE_ALG, **result}
 
     def get_decisions(
         self,
@@ -263,5 +316,9 @@ class GovernanceEngine:
             },
             "integrity": {
                 "event_hash": record.event_hash,
+                "policy_version": record.policy_version,
+                "signature": record.signature,
+                "signing_key_id": record.signing_key_id,
+                "signature_algorithm": "Ed25519" if record.signature else None,
             },
         }

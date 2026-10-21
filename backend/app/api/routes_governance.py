@@ -134,6 +134,23 @@ def get_governance_receipt(run_id: str, decision_id: int):
         db.close()
 
 
+@router.get("/governance/receipts/{run_id}/{decision_id}/verify")
+def verify_governance_receipt(run_id: str, decision_id: int, db: Session = Depends(get_db)):
+    """Verify a receipt's Ed25519 signature against the stored decision content."""
+    result = _gov_engine.verify_receipt(db, run_id, decision_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    return result
+
+
+@router.get("/governance/signing-key")
+def get_signing_key():
+    """Public key that signs governance receipts on this deployment, for independent verification."""
+    from app.utils.signing import public_key_info
+
+    return public_key_info()
+
+
 @router.get("/policies/version")
 def get_policy_version():
     """Return the current policy version hash and all active parameters.

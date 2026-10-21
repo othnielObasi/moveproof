@@ -32,7 +32,7 @@
 | 10 | Scoring UI | Very High | ✅ | 100% |
 | 11 | Keep learning above control | Very High | ✅ | 100% |
 | 12 | Adaptive tuning / safe learning | Very High | ✅ | 100% |
-| 13 | Safe parameter auto-tuning | Very High | ✅ | 100% |
+| 13 | Safe parameter tuning (recommend-only; changes go through governed proposals) | Very High | ✅ | 100% |
 | 14 | Policy thresholds / hard-failure gates | High | ✅ | 100% |
 | 15 | Anti-reward-hacking protections | High | ✅ | 100% |
 | 16 | Policy versioning and tuning history | High | ✅ | 100% |
@@ -493,7 +493,7 @@ All key pillars are implemented:
 - **Determinism**: Simulator as single source of truth, formalised constraints, controller fidelity (items 4, 5, 6)
 - **Auditability**: Run metrics logging, policy versioning, agent introspection (items 9, 16, 20)
 - **Safety-by-design**: Learning above control, hard-failure gates (items 11, 14)
-- **Measurable improvement**: Scoring engine, adaptive tuning, safe auto-tuning (items 8, 12, 13)
+- **Measurable improvement**: Scoring engine, adaptive tuning, governed parameter changes (items 8, 12, 13)
 - **Governance-bounded optimization**: Optimizer within safety envelope (item 7)
 
 ### 28. Full RL (Later-Stage Only)

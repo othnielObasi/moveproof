@@ -1,7 +1,10 @@
-"""Adaptive tuning service with safe auto-tuning (#12, #13).
+"""Adaptive tuning service: safe parameter *recommendations* (#12, #13).
 
 Analyses historical run data to recommend parameter adjustments, bounded
-by hard safety limits.  Implements conservative Bayesian-style update:
+by hard safety limits. Nothing here changes the active rules: a
+recommendation only takes effect through the governed proposal workflow
+(app/policies/proposals.py): replay gate, named human approval, versioned
+activation, rollback.  Implements conservative Bayesian-style update:
 only tightens safety parameters when evidence demands it, and only relaxes
 efficiency parameters when safety margin is demonstrably sufficient.
 """
@@ -23,7 +26,7 @@ logger = logging.getLogger("app.adaptive_tuning")
 # Safety margin: how much headroom required before relaxing a parameter
 SAFETY_MARGIN = 0.15  # 15% above threshold required
 
-# Minimum number of completed runs before auto-tuning activates
+# Minimum number of completed runs before recommendations are produced
 MIN_RUNS_FOR_TUNING = 3
 
 # Maximum adjustment per tuning cycle (prevents oscillation)
@@ -60,6 +63,8 @@ def compute_tuning_recommendations(db: Session) -> Dict[str, Any]:
     if n < MIN_RUNS_FOR_TUNING:
         return {
             "status": "insufficient_data",
+            "mode": "recommend_only",
+            "auto_tuning_active": False,
             "runs_analysed": n,
             "min_required": MIN_RUNS_FOR_TUNING,
             "recommendations": [],
@@ -153,7 +158,7 @@ def compute_tuning_recommendations(db: Session) -> Dict[str, Any]:
                 "safe": True,
                 "urgent": True,
             })
-        tuning_log.append("URGENT: Safety below threshold — aggressive tightening applied")
+        tuning_log.append("URGENT: Safety below threshold — aggressive tightening recommended")
 
     return {
         "status": "ok",
@@ -165,7 +170,9 @@ def compute_tuning_recommendations(db: Session) -> Dict[str, Any]:
         "tuning_log": tuning_log,
         "hard_bounds": HARD_BOUNDS,
         "current_params": CURRENT_PARAMS,
-        "auto_tuning_active": True,
+        "auto_tuning_active": False,
+        "mode": "recommend_only",
+        "how_to_apply": "POST /policies/proposals/from-tuning, then evaluate, approve and activate",
         "safety_margin": SAFETY_MARGIN,
         "max_adjustment_per_cycle": MAX_ADJUSTMENT_RATIO,
     }

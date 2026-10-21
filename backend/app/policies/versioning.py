@@ -8,20 +8,9 @@ that was in effect, enabling reproducibility and regulatory traceability.
 
 import hashlib
 import json
-from pathlib import Path
 from typing import Any, Dict
 
-from app.policies.rules_python import (
-    GEOFENCE,
-    ZONE_SPEED_LIMITS,
-    MIN_OBSTACLE_CLEARANCE_M,
-    MIN_HUMAN_CONF,
-    MAX_SPEED_NEAR_HUMAN,
-    MIN_CONF_FOR_MOVE,
-    HUMAN_SLOW_RADIUS_M,
-    HUMAN_STOP_RADIUS_M,
-    REVIEW_RISK_THRESHOLD,
-)
+from app.policies.params import active_params
 
 # Singleton cache
 _cached_version: str | None = None
@@ -29,18 +18,8 @@ _cached_params: Dict[str, Any] | None = None
 
 
 def _policy_params() -> Dict[str, Any]:
-    """Collect all active policy parameters into a canonical dict."""
-    return {
-        "GEOFENCE": GEOFENCE,
-        "ZONE_SPEED_LIMITS": ZONE_SPEED_LIMITS,
-        "MIN_OBSTACLE_CLEARANCE_M": MIN_OBSTACLE_CLEARANCE_M,
-        "MIN_HUMAN_CONF": MIN_HUMAN_CONF,
-        "MAX_SPEED_NEAR_HUMAN": MAX_SPEED_NEAR_HUMAN,
-        "MIN_CONF_FOR_MOVE": MIN_CONF_FOR_MOVE,
-        "HUMAN_SLOW_RADIUS_M": HUMAN_SLOW_RADIUS_M,
-        "HUMAN_STOP_RADIUS_M": HUMAN_STOP_RADIUS_M,
-        "REVIEW_RISK_THRESHOLD": REVIEW_RISK_THRESHOLD,
-    }
+    """The ACTIVE policy parameters (defaults until a governed change is activated)."""
+    return active_params()
 
 
 def policy_version_hash() -> str:

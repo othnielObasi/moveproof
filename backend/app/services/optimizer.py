@@ -34,8 +34,8 @@ logger = logging.getLogger("app.optimizer")
 # Hard safety bounds — these are ABSOLUTE and cannot be relaxed
 HARD_BOUNDS = {
     "max_speed_aisle": {"min": 0.1, "max": float(ZONE_SPEED_LIMITS.get("aisle", 0.5))},
-    "max_speed_loading": {"min": 0.1, "max": float(ZONE_SPEED_LIMITS.get("loading", 0.3))},
-    "max_speed_open": {"min": 0.1, "max": float(ZONE_SPEED_LIMITS.get("open", 0.8))},
+    "max_speed_loading": {"min": 0.1, "max": float(ZONE_SPEED_LIMITS.get("loading_bay", 0.4))},
+    "max_speed_open": {"min": 0.1, "max": float(ZONE_SPEED_LIMITS.get("corridor", 0.7))},
     "obstacle_clearance_m": {"min": float(MIN_OBSTACLE_CLEARANCE_M), "max": 3.0},
     "human_slow_radius_m": {"min": float(HUMAN_STOP_RADIUS_M) + 0.5, "max": 10.0},
     "human_stop_radius_m": {"min": 0.5, "max": float(HUMAN_SLOW_RADIUS_M)},
@@ -45,8 +45,8 @@ HARD_BOUNDS = {
 # Current operating parameters (mutable snapshot)
 CURRENT_PARAMS = {
     "max_speed_aisle": float(ZONE_SPEED_LIMITS.get("aisle", 0.5)),
-    "max_speed_loading": float(ZONE_SPEED_LIMITS.get("loading", 0.3)),
-    "max_speed_open": float(ZONE_SPEED_LIMITS.get("open", 0.8)),
+    "max_speed_loading": float(ZONE_SPEED_LIMITS.get("loading_bay", 0.4)),
+    "max_speed_open": float(ZONE_SPEED_LIMITS.get("corridor", 0.7)),
     "obstacle_clearance_m": float(MIN_OBSTACLE_CLEARANCE_M),
     "human_slow_radius_m": float(HUMAN_SLOW_RADIUS_M),
     "human_stop_radius_m": float(HUMAN_STOP_RADIUS_M),

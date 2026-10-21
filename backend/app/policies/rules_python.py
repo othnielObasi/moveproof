@@ -2,22 +2,25 @@ from __future__ import annotations
 
 from typing import Dict, Any, Tuple, List
 from app.schemas.governance import GovernanceDecision, ActionProposal
-from app.world_model import GEOFENCE, ZONE_SPEED_LIMITS
+from app.policies.params import DEFAULT_PARAMS, active_params
 
 
-# --- Policy parameters (MVP constants) ---
-# GEOFENCE and ZONE_SPEED_LIMITS now loaded from world_model (single source of truth)
-
-MIN_OBSTACLE_CLEARANCE_M = 0.5
-MIN_HUMAN_CONF = 0.65
-MAX_SPEED_NEAR_HUMAN = 0.4
-MIN_CONF_FOR_MOVE = 0.55
+# --- Policy parameters ---
+# Module constants are the DEFAULTS (kept for importers and tests). The gate
+# itself reads the ACTIVE set (app/policies/params.py), which changes only via
+# the governed proposal workflow.
+GEOFENCE = DEFAULT_PARAMS["GEOFENCE"]
+ZONE_SPEED_LIMITS = DEFAULT_PARAMS["ZONE_SPEED_LIMITS"]
+MIN_OBSTACLE_CLEARANCE_M = DEFAULT_PARAMS["MIN_OBSTACLE_CLEARANCE_M"]
+MIN_HUMAN_CONF = DEFAULT_PARAMS["MIN_HUMAN_CONF"]
+MAX_SPEED_NEAR_HUMAN = DEFAULT_PARAMS["MAX_SPEED_NEAR_HUMAN"]
+MIN_CONF_FOR_MOVE = DEFAULT_PARAMS["MIN_CONF_FOR_MOVE"]
 
 # Distance-based human proximity thresholds (Fix 2)
-HUMAN_SLOW_RADIUS_M = 3.0   # slow down when human within this range
-HUMAN_STOP_RADIUS_M = 1.0   # full stop when human within this range
+HUMAN_SLOW_RADIUS_M = DEFAULT_PARAMS["HUMAN_SLOW_RADIUS_M"]   # slow down when human within this range
+HUMAN_STOP_RADIUS_M = DEFAULT_PARAMS["HUMAN_STOP_RADIUS_M"]   # full stop when human within this range
 
-REVIEW_RISK_THRESHOLD = 0.75
+REVIEW_RISK_THRESHOLD = DEFAULT_PARAMS["REVIEW_RISK_THRESHOLD"]
 
 # --- Hard vs Soft failure classification (#14) ---
 # HARD failures: immediate DENIED, no override possible, no upgrade to NEEDS_REVIEW
@@ -36,12 +39,27 @@ SOFT_FAIL_POLICIES = frozenset({
 })
 
 
-def evaluate_policies(telemetry: Dict[str, Any], proposal: ActionProposal) -> GovernanceDecision:
+def evaluate_policies(
+    telemetry: Dict[str, Any],
+    proposal: ActionProposal,
+    params: Dict[str, Any] | None = None,
+) -> GovernanceDecision:
     """Evaluate a proposal against a small policy set.
 
     Returns an APPROVED / DENIED / NEEDS_REVIEW decision with reasons
     and an explicit policy_state (SAFE / SLOW / STOP / REPLAN).
     """
+    p = params if params is not None else active_params()
+    GEOFENCE = p["GEOFENCE"]
+    ZONE_SPEED_LIMITS = p["ZONE_SPEED_LIMITS"]
+    MIN_OBSTACLE_CLEARANCE_M = float(p["MIN_OBSTACLE_CLEARANCE_M"])
+    MIN_HUMAN_CONF = float(p["MIN_HUMAN_CONF"])
+    MAX_SPEED_NEAR_HUMAN = float(p["MAX_SPEED_NEAR_HUMAN"])
+    MIN_CONF_FOR_MOVE = float(p["MIN_CONF_FOR_MOVE"])
+    HUMAN_SLOW_RADIUS_M = float(p["HUMAN_SLOW_RADIUS_M"])
+    HUMAN_STOP_RADIUS_M = float(p["HUMAN_STOP_RADIUS_M"])
+    REVIEW_RISK_THRESHOLD = float(p["REVIEW_RISK_THRESHOLD"])
+
     policy_hits: List[str] = []
     reasons: List[str] = []
     required_action: str | None = None

@@ -22,10 +22,32 @@ from app.api.routes_compliance import router as compliance_router
 from app.auth.routes import router as auth_router
 from app.api.routes_llm import router as llm_router
 from app.api.routes_operator import router as operator_router
+from app.api.routes_policy_proposals import router as policy_proposals_router
 from app.services.run_service import RunService
 
 configure_logging()
 logger = logging.getLogger("app")
+
+
+def _add_missing_nullable_columns() -> None:
+    """Development only: create_all() never alters existing tables, so a local
+    database made by an older version lacks newer columns. Add any missing
+    *nullable* columns in place. Production uses Alembic migrations instead."""
+    from sqlalchemy import inspect
+
+    insp = inspect(engine)
+    existing_tables = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in have or not col.nullable:
+                    continue
+                ddl = col.type.compile(dialect=engine.dialect)
+                conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {col.name} {ddl}'))
+                logger.info("Added missing column %s.%s", table.name, col.name)
 
 
 def init_database(max_retries: int = 5, retry_delay: int = 2):
@@ -43,6 +65,7 @@ def init_database(max_retries: int = 5, retry_delay: int = 2):
                 logger.info("✅ Database connection verified; schema managed via Alembic migrations")
             else:
                 Base.metadata.create_all(bind=engine)
+                _add_missing_nullable_columns()
                 logger.info("✅ Database initialized successfully")
 
             return True
@@ -67,6 +90,18 @@ async def lifespan(app: FastAPI):
     logger.info(f"   Planner: {settings.planner_provider} (Nemotron: {'on' if settings.nemotron_configured else 'off'}, Gemini: {'on' if settings.gemini_configured else 'off'})")
     
     init_database()
+
+    # Enforce the most recently activated rules (defaults if none were ever activated)
+    try:
+        from app.db.session import SessionLocal as _PSL
+        from app.policies.params import load_active_from_db
+        _pdb = _PSL()
+        try:
+            logger.info(f"   Policy version: {load_active_from_db(_pdb) or 'defaults'}")
+        finally:
+            _pdb.close()
+    except Exception as _perr:
+        logger.error(f"Could not load active policy version, enforcing defaults: {_perr}")
 
     # Mark stale "running" runs as interrupted on startup.
     # In-memory state (asyncio tasks, plans) is lost across restarts, so
@@ -164,6 +199,7 @@ app.include_router(ws_router)
 app.include_router(compliance_router)
 app.include_router(llm_router)
 app.include_router(operator_router)
+app.include_router(policy_proposals_router)
 
 # Initialize RunService and bind broadcaster
 run_service = RunService()

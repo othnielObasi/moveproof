@@ -32,3 +32,6 @@ recordings/
 
 # Generated runtime files
 userdata.sh
+
+# Receipt signing keys
+*.key

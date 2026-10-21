@@ -31,7 +31,7 @@ MoveProof is a **real-time governance layer** that interposes between the robot'
 |---|---|
 | **8 safety policies** | Geofence, zone speed limits, human proximity, obstacle clearance, perception uncertainty, human-in-the-loop escalation, human confidence speed check, walking worker proximity |
 | **Intervention state machine** | SAFE → SLOW → STOP → REPLAN with automatic escalation and operator override |
-| **Tamper-proof audit trail** | SHA-256 hash-chained event log — every decision, context, and rationale is cryptographically linked |
+| **Tamper-proof audit trail** | SHA-256 hash-chained event log plus Ed25519-signed decision receipts |
 | **Governance receipts** | Structured proof documents for each decision, queryable per run/policy/time |
 | **Regulatory compliance** | Framework-aligned reports for ISO 42001, EU AI Act, and NIST AI RMF with chain verification |
 | **Operator oversight** | HITL triggers when risk ≥ 0.75; approval/deny/override workflows with full audit trail |
@@ -85,7 +85,23 @@ Safety properties:
 - Lessons only change what the planner **proposes**. The gate evaluates every move exactly as before.
 - Lessons are **scoped to the policy version** they were learned under; when the rules change, old lessons stop being used.
 
-Inspect them: `GET /agent/lessons` and `GET /agent/lessons/route?sx=&sy=&gx=&gy=` (the exact block Nemotron would receive). Changing the rules themselves is a separate, human-approved process tied to the safety benchmark (in progress).
+Inspect them: `GET /agent/lessons` and `GET /agent/lessons/route?sx=&sy=&gx=&gy=` (the exact block Nemotron would receive).
+
+### Governed rule changes
+
+The gate's thresholds change only through this workflow ([`backend/app/policies/proposals.py`](backend/app/policies/proposals.py)):
+
+1. **Propose** a change to a named threshold (`POST /policies/proposals`, or `/policies/proposals/from-tuning` to turn tuning recommendations into one). Hard bounds in code refuse anything outside safe limits.
+2. **Evaluate** by replay (`/evaluate`): every recorded gate decision is re-judged under the candidate and the active rules, and each move is labelled safe or unsafe by fixed safety floors no proposal can change. The candidate fails if it would have allowed a single unsafe move; a relaxation also needs at least 50 recorded decisions. The seeded safety benchmark joins this gate when it lands.
+3. **Approve** (`/approve`): a named person who is not the proposer.
+4. **Activate** (`/activate`): only between runs, and only if the rules haven't changed since the proposal. Every activation is an append-only record; every decision stores the version it was judged under.
+5. **Roll back** at any time (`POST /policies/rollback`).
+
+`GET /policies/active` shows the rules in force, the latest activation, the changeable thresholds with their bounds, and the safety floors.
+
+### Signed receipts
+
+Every gate decision is signed with Ed25519 (what was proposed, what the gate saw, the rules version, the outcome). Verify one with `GET /governance/receipts/{run_id}/{id}/verify`; the public key is at `GET /governance/signing-key`. Set `RECEIPT_SIGNING_KEY` in production (see [`backend/app/utils/signing.py`](backend/app/utils/signing.py)); without it a development key is generated in `data/`.
 
 ---
 
@@ -99,6 +115,8 @@ MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.
 - [x] Per-call latency and token telemetry (`GET /llm/usage`)
 - [x] Rebrand to MoveProof
 - [x] Planner learning loop: lessons distilled from gate decisions feed Nemotron's plans and replans, recorded on each plan
+- [x] Governed rule changes: propose, replay gate, separate approver, versioned activation, rollback
+- [x] Ed25519-signed governance receipts with a verification endpoint
 - [ ] Enhanced warehouse: richer layout, moving workers and forklifts, robot camera view, seeded scenarios
 - [ ] NVIDIA vision model perception, cross-checked by the governance gate against simulator ground truth
 - [ ] Safety benchmark at scale on Nebius Serverless Jobs: unsafe moves proposed vs. unsafe moves executed
@@ -385,7 +403,7 @@ moveproof/
 │   │   │                         #   mission service, Nemotron planner, sim adapter
 │   │   └── utils/                # SHA-256 hashing, ID generation, time
 │   ├── alembic/                  # Database migrations (3 versions)
-│   └── tests/                    # pytest suite (116 tests)
+│   └── tests/                    # pytest suite (137 tests)
 │
 ├── frontend/                     # Operator Dashboard — Next.js 14, React 18, TS
 │   └── src/
@@ -444,7 +462,7 @@ CI/CD is configured in `.github/workflows/` — push to `main` triggers backend 
 ## Testing
 
 ```bash
-# Backend tests (116 tests — governance, API smoke, plan execution, lifecycle, Nemotron routing, learning loop)
+# Backend tests (137 tests — governance, API smoke, plan execution, lifecycle, Nemotron routing, learning loop, rule changes, signing)
 cd backend && python -m pytest tests/ -q
 
 # Frontend type-check

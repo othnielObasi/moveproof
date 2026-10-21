@@ -104,6 +104,8 @@ class GovernanceDecisionRecord(Base):
     event_hash = Column(String, nullable=True)  # links to chain-of-trust Event.hash
     escalated = Column(String, nullable=False, default="false")  # "true" if escalated to operator
     policy_version = Column(String, nullable=True)  # SHA256 prefix of active policy params
+    signature = Column(Text, nullable=True)  # Ed25519 signature (base64) over the decision content
+    signing_key_id = Column(String, nullable=True)  # which deployment key signed it
 
     run = relationship("Run", back_populates="governance_decisions")
 
@@ -173,3 +175,42 @@ class CircuitBreakerState(Base):
     consecutive_denials = Column(Integer, nullable=False, default=0)
     escalated = Column(String, nullable=False, default="false")
     last_updated = Column(DateTime(timezone=True), nullable=False)
+
+
+class PolicyProposal(Base):
+    """A proposed change to the gate's thresholds. Never takes effect by itself:
+    draft -> evaluated (replay gate) -> approved (named person) -> active,
+    or rejected / superseded."""
+    __tablename__ = "policy_proposals"
+
+    id = Column(String, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    created_by = Column(String, nullable=False)
+    source = Column(String, nullable=False, default="manual")  # manual|tuning
+    description = Column(Text, nullable=True)
+    base_version = Column(String, nullable=False)
+    changes_json = Column(Text, nullable=False)          # [{"path","from","to","direction"}]
+    candidate_params_json = Column(Text, nullable=False)
+    candidate_version = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="draft", index=True)
+    evaluation_json = Column(Text, nullable=True)
+    approved_by = Column(String, nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    approval_note = Column(Text, nullable=True)
+    activated_at = Column(DateTime(timezone=True), nullable=True)
+    rejected_reason = Column(Text, nullable=True)
+
+
+class PolicyActivation(Base):
+    """Append-only log of which parameter set the gate enforces. The latest row is active;
+    a rollback is a new row restoring earlier parameters."""
+    __tablename__ = "policy_activations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    version_hash = Column(String, nullable=False, index=True)
+    parameters_json = Column(Text, nullable=False)
+    activated_at = Column(DateTime(timezone=True), nullable=False)
+    activated_by = Column(String, nullable=False)
+    proposal_id = Column(String, nullable=True)
+    previous_version = Column(String, nullable=True)
+    reason = Column(Text, nullable=True)
