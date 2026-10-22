@@ -27,9 +27,12 @@ class ScenarioIn(BaseModel):
 async def get_telemetry():
     """Proxy the simulator's current telemetry (robot position, sensors)."""
     try:
-        return await sim.get_telemetry()
+        telemetry = await sim.get_telemetry()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"sim error: {e}")
+    # Include active hazard zones so every view shows what the gate enforces
+    from app.services.site_intel.service import site_intel
+    return site_intel.observe(telemetry)
 
 
 @router.get("/sim/world", response_model=SimWorld)

@@ -112,7 +112,7 @@ app = FastAPI(title="MoveProof Warehouse Simulator", version="0.2.0", lifespan=l
 
 def _obstacles(w: World) -> List[Dict[str, Any]]:
     out = [{"x": c.x, "y": c.y, "r": c.r, "type": c.kind} for c in w.layout.static]
-    out += [{"x": round(c.x, 2), "y": round(c.y, 2), "r": c.r, "type": c.kind} for c in w.active_spawns]
+    out += [{"x": round(c.x, 2), "y": round(c.y, 2), "r": c.r, "type": c.kind, **(c.meta or {})} for c in w.active_spawns]
     out += [{"x": round(v.pos[0], 2), "y": round(v.pos[1], 2), "r": v.radius, "type": "forklift",
              "heading": round(_heading(v), 3)} for v in w.vehicles()]
     return out
@@ -243,6 +243,9 @@ SCENARIOS = {
 }
 
 
+SPILL_SUBSTANCES = ["isopropyl alcohol", "hydraulic oil", "sodium hypochlorite solution", "detergent"]
+
+
 def _ahead(w: World, d: float):
     return (w.robot.x + math.cos(w.robot.theta) * d, w.robot.y + math.sin(w.robot.theta) * d)
 
@@ -271,8 +274,16 @@ def inject_scenario(request: Request, body: ScenarioRequest):
                 w.walkers[-1].pause_until = w.t + 8.0
         elif s in ("path_blocked", "spill"):
             x, y = _ahead(w, 2.0 if s == "path_blocked" else 3.0)
+            _state["spills"] = _state.get("spills", 0) + 1
+            n = _state["spills"]
+            meta = None
+            if s == "spill":
+                # What was spilled comes from the warehouse system (the tote that was dropped)
+                substance = str(body.params.get("substance") or SPILL_SUBSTANCES[(n - 1) % len(SPILL_SUBSTANCES)])
+                meta = {"id": f"spill-{n}", "substance": substance,
+                        "source": f"WMS: tote T-{4400 + n} dropped, contents '{substance}'"}
             w.active_spawns.append(Circle(x, y, 0.5 if s == "path_blocked" else 0.45,
-                                          "dropped_pallet" if s == "path_blocked" else "spill"))
+                                          "dropped_pallet" if s == "path_blocked" else "spill", meta))
         elif s == "forklift_crossing":
             fl = next((v for v in w.walkers if v.kind == "forklift"), None)
             if fl:

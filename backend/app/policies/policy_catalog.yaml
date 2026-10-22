@@ -90,3 +90,22 @@ policies:
       path_margin_m: 0.6
     trigger: "Straight path to the target passes within 0.2 m of racking (robot body)"
     action: REPLAN
+
+  - policy_id: HAZARD_EXCLUSION_08
+    name: Hazard exclusion zone
+    description: Deny a move that would enter or cross a temporary exclusion zone round a hazard such as a spill. Every spill gets a baseline zone at once; corroborated guidance from authoritative sources (via Tavily, screened as untrusted) can only enlarge it. A robot already inside may only back out, slowly.
+    severity: HIGH
+    parameters:
+      baseline_radius_m: 1.2
+      max_radius_m: 6.0
+      corroborating_sources: 2
+    trigger: "Path to the target passes within the zone radius, or the robot is inside and not leaving"
+    action: REPLAN
+  - policy_id: HAZARD_SLOW_09
+    name: Hazard slow zone
+    description: Cap speed near a hazard zone. Limits come from reviewed per-hazard rules (0.2 to 0.3 m/s), never from outside text.
+    severity: MEDIUM
+    parameters:
+      max_speed_range: "0.1 to 0.3"
+    trigger: "Robot or path within the slow radius above the zone's speed cap"
+    action: SLOW

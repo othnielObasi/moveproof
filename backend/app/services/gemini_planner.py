@@ -242,9 +242,11 @@ Output STRICT JSON: {{"intent":"MOVE_TO|STOP|WAIT","params":{{...}},"rationale":
     async def generate_plan(self, telemetry: Dict[str, Any], instruction: str,
                             goal: Optional[Dict[str, float]] = None,
                             preferred_model: Optional[str] = None,
-                            lessons: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                            lessons: Optional[List[Dict[str, Any]]] = None,
+                            untrusted_context: str = "") -> Dict[str, Any]:
         """Multi-waypoint plan. `lessons` = advisory context from planner_lessons
-        (learned from past gate decisions); their IDs are returned as lessons_applied."""
+        (learned from past gate decisions); their IDs are returned as lessons_applied.
+        `untrusted_context` = fenced, firewall-screened outside information (reference only)."""
         lesson_ids = [l["id"] for l in (lessons or [])]
         if not self.api_key:
             plan = self._deterministic_plan(telemetry, goal)
@@ -266,6 +268,8 @@ STATE: {json.dumps(telemetry, indent=2)}
 {bays_text}
 
 {lessons_text}
+
+{untrusted_context}
 
 IMPORTANT: When the instruction mentions a bay ID (e.g. B-03, S-01, R-02), use the EXACT coordinates from the Bay Directory above. Do NOT guess bay positions.
 

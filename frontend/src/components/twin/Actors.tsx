@@ -13,6 +13,7 @@ import { labelTexture, loadTexture, rng, vestTexture, woodTexture } from "./text
 export const VERDICT_COLOURS: Record<string, string> = {
   APPROVED: "#22c55e",
   NEEDS_REVIEW: "#f59e0b",
+  HOLDING: "#f59e0b",
   DENIED: "#ef4444",
   IDLE: "#38bdf8",
 };
@@ -558,6 +559,73 @@ export function Features({ features }: { features: { type: string; x: number; y:
           );
         return null;
       })}
+    </group>
+  );
+}
+
+/* ─────────────────────────── hazard zones ─────────────────────────── */
+
+type Zone = { id: string; x: number; y: number; radius: number; slow_radius: number; max_speed: number; label?: string };
+type RackRect = { x1: number; x2: number; y: number; depth?: number };
+
+/** Traffic cones round an exclusion zone, the way a site cones off a spill. */
+export function ZoneCones({ zone, racks, bounds }: { zone: Zone; racks: RackRect[]; bounds: { min_x: number; max_x: number; min_y: number; max_y: number } }) {
+  const spots = useMemo(() => {
+    const n = Math.max(6, Math.ceil((2 * Math.PI * zone.radius) / 1.3));
+    const out: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = zone.x + Math.cos(a) * zone.radius, y = zone.y + Math.sin(a) * zone.radius;
+      if (x < bounds.min_x + 0.3 || x > bounds.max_x - 0.3 || y < bounds.min_y + 0.3 || y > bounds.max_y - 0.3) continue;
+      if (racks.some((r) => x > r.x1 - 0.35 && x < r.x2 + 0.35 && y > r.y - 0.35 && y < r.y + (r.depth ?? 1) + 0.35)) continue;
+      out.push([x, y]);
+    }
+    return out;
+  }, [zone.x, zone.y, zone.radius, racks, bounds]);
+  const mats = useMemo(() => ({
+    cone: new THREE.MeshStandardMaterial({ color: "#ff5a1f", roughness: 0.55 }),
+    band: new THREE.MeshStandardMaterial({ color: "#f1f5f9", roughness: 0.3, metalness: 0.2 }),
+    base: new THREE.MeshStandardMaterial({ color: "#151515", roughness: 0.8 }),
+  }), []);
+  return (
+    <group>
+      {spots.map(([x, y], i) => (
+        <group key={i} position={[x, 0, -y]}>
+          <mesh position={[0, 0.02, 0]} castShadow material={mats.base}>
+            <boxGeometry args={[0.32, 0.04, 0.32]} />
+          </mesh>
+          <mesh position={[0, 0.27, 0]} castShadow material={mats.cone}>
+            <cylinderGeometry args={[0.025, 0.13, 0.46, 18]} />
+          </mesh>
+          <mesh position={[0, 0.3, 0]} material={mats.band}>
+            <cylinderGeometry args={[0.068, 0.084, 0.08, 18]} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** Floor marking for the governance layer: no-entry disc and the slow ring. */
+export function ZoneMarking({ zone }: { zone: Zone }) {
+  const edge = useRef<THREE.MeshBasicMaterial>(null!);
+  useFrame(({ clock }) => {
+    if (edge.current) edge.current.opacity = 0.6 + 0.35 * Math.sin(clock.elapsedTime * 4);
+  });
+  return (
+    <group position={[zone.x, 0.016, -zone.y]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh>
+        <circleGeometry args={[zone.radius, 64]} />
+        <meshBasicMaterial color="#ef4444" transparent opacity={0.14} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <ringGeometry args={[zone.radius - 0.07, zone.radius, 96]} />
+        <meshBasicMaterial ref={edge} color="#ef4444" transparent opacity={0.9} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <ringGeometry args={[zone.slow_radius - 0.04, zone.slow_radius, 96]} />
+        <meshBasicMaterial color="#f59e0b" transparent opacity={0.55} depthWrite={false} toneMapped={false} />
+      </mesh>
     </group>
   );
 }

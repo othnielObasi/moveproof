@@ -460,3 +460,33 @@ export async function getExecutedPath(runId: string) {
   if (!r.ok) throw new Error(await parseErrorResponse(r, "Failed to get executed path"));
   return r.json();
 }
+
+/* ── Site intelligence (Tavily, untrusted input) ─────────────────────────── */
+
+export async function getSiteIntelStatus() {
+  const r = await fetchWithRetry(`${API_BASE}/site-intel/status`, { cache: "no-store" });
+  if (!r.ok) throw new Error(await parseErrorResponse(r, "Failed to load site intelligence status"));
+  return r.json();
+}
+
+export async function getSiteIntelLookups(limit = 5) {
+  const r = await fetchWithRetry(`${API_BASE}/site-intel/lookups?limit=${limit}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(await parseErrorResponse(r, "Failed to load lookups"));
+  return r.json();
+}
+
+export async function getBulletins(limit = 5) {
+  const r = await fetchWithRetry(`${API_BASE}/site-intel/bulletins?limit=${limit}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(await parseErrorResponse(r, "Failed to load bulletins"));
+  return r.json();
+}
+
+export async function postBulletin(text: string, source = "noticeboard") {
+  const r = await fetchWithRetry(`${API_BASE}/site-intel/bulletin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, source }),
+  });
+  if (!r.ok) throw new Error(await parseErrorResponse(r, "Failed to post bulletin"));
+  return r.json();
+}

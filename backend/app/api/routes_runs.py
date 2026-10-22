@@ -148,7 +148,12 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
 
                 async with asyncio.timeout(LLM_PLAN_TIMEOUT):
                     planner = get_planner()
-                    plan = await planner.generate_plan(telemetry, mission_title, goal, lessons=lessons)
+                    from app.services.site_intel.service import site_intel
+                    try:
+                        plan = await planner.generate_plan(telemetry, mission_title, goal, lessons=lessons,
+                                                           untrusted_context=site_intel.planner_context())
+                    except TypeError:  # planners without the parameter
+                        plan = await planner.generate_plan(telemetry, mission_title, goal, lessons=lessons)
 
                 if plan and plan.get("waypoints"):
                     # Keep the model's waypoints but re-route any leg that would cut through racking

@@ -65,6 +65,7 @@ class Circle:
     y: float
     r: float
     kind: str = "obstacle"
+    meta: Optional[Dict[str, Any]] = None   # e.g. a spill's id and substance
 
     def distance(self, x: float, y: float) -> float:
         return max(0.0, math.hypot(self.x - x, self.y - y) - self.r)

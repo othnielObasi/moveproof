@@ -11,7 +11,7 @@ import { Bloom, EffectComposer, N8AO, SMAA, Vignette } from "@react-three/postpr
 import * as THREE from "three";
 import { Building } from "./Building";
 import { Racking } from "./Racking";
-import { Features, Forklift, Obstacle, Robot, VERDICT_COLOURS, Worker } from "./Actors";
+import { Features, Forklift, Obstacle, Robot, VERDICT_COLOURS, Worker, ZoneCones, ZoneMarking } from "./Actors";
 import type { WorldLayout } from "./textures";
 
 export type CameraMode = "overview" | "follow" | "robot";
@@ -23,7 +23,7 @@ export type TwinProps = {
   telemetry: any | null;
   verdict?: string | null; // APPROVED | NEEDS_REVIEW | DENIED
   verdictText?: string | null;
-  proposal?: { intent?: string; params?: any } | null;
+  proposal?: { intent?: string; params?: any; rationale?: string } | null;
   planWaypoints?: Array<Pt & { max_speed?: number }> | null;
   executedPath?: Pt[];
   goal?: Pt | null;
@@ -201,8 +201,11 @@ function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detectio
   }, [peopleRaw, telemetry?.human]);
   const idle: any[] = telemetry?.idle_robots ?? world?.idle_robots ?? [];
   const forklifts = obstacles.filter((o) => o.type === "forklift");
+  const zones: any[] = telemetry?.site_constraints ?? [];
   const statics = obstacles.filter((o) => o.type !== "forklift");
-  const v = verdict ?? "IDLE";
+  // An approved WAIT is the robot holding on purpose (e.g. for a hazard), not a normal approval
+  const holding = verdict === "APPROVED" && proposal?.intent === "WAIT";
+  const v = holding ? "HOLDING" : verdict ?? "IDLE";
 
   const ghostTarget = proposal?.intent === "MOVE_TO" && v !== "APPROVED" && proposal?.params && typeof proposal.params.x === "number" ? { x: proposal.params.x, y: proposal.params.y } : null;
   const nearestPerson = people.reduce((m: number, p: any) => Math.min(m, Math.hypot(p.x - rx, p.y - ry)), 999);
@@ -247,6 +250,9 @@ function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detectio
       {statics.map((o, i) => (
         <Obstacle key={`${o.type}-${i}-${o.x}-${o.y}`} o={o} />
       ))}
+      {zones.map((z: any) => (
+        <ZoneCones key={`cones-${z.id}-${z.radius}`} zone={z} racks={layout.racks} bounds={g} />
+      ))}
       {forklifts.map((f, i) => (
         <Forklift key={`fl-${i}`} x={f.x} y={f.y} heading={f.heading ?? 0} />
       ))}
@@ -268,6 +274,16 @@ function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detectio
           )}
           {goal && <GoalMarker goal={goal} label={goalLabel} />}
           <SafetyZones people={people} robot={{ x: rx, y: ry }} />
+          {zones.map((z: any) => (
+            <group key={`zm-${z.id}`}>
+              <ZoneMarking zone={z} />
+              <Html position={[z.x, 1.3, -z.y]} center distanceFactor={14} zIndexRange={[15, 0]}>
+                <div style={{ background: "rgba(127,29,29,.92)", color: "#fee2e2", font: "700 11px system-ui", padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap", border: "1px solid #ef4444", pointerEvents: "none" }}>
+                  NO ENTRY · {z.label ?? "hazard"} · {Number(z.radius).toFixed(1)} m
+                </div>
+              </Html>
+            </group>
+          ))}
           {ghostTarget && (
             <>
               <Robot x={ghostTarget.x} y={ghostTarget.y} theta={Math.atan2(ghostTarget.y - ry, ghostTarget.x - rx)} verdict={v} ghost />
@@ -275,14 +291,14 @@ function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detectio
             </>
           )}
           {mode !== "robot" && (
-            <Html position={[rx, 1.55, -ry]} center distanceFactor={12} zIndexRange={[20, 0]}>
+            <Html position={[rx, 1.55, -ry]} center zIndexRange={[20, 0]}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, pointerEvents: "none" }}>
                 <div style={{ background: VERDICT_COLOURS[v] ?? "#38bdf8", color: "#0b0b0b", font: "800 12px system-ui", padding: "3px 9px", borderRadius: 6, whiteSpace: "nowrap", boxShadow: "0 2px 10px rgba(0,0,0,.35)" }}>
                   {v === "IDLE" ? "STANDBY" : v.replace("_", " ")}
                   {nearestPerson < 6 ? ` · person ${nearestPerson.toFixed(1)} m` : ""}
                 </div>
                 {verdictText && v !== "APPROVED" && v !== "IDLE" && (
-                  <div style={{ background: "rgba(15,23,42,.88)", color: "#e2e8f0", font: "500 11px system-ui", padding: "2px 8px", borderRadius: 5, maxWidth: 260, textAlign: "center" }}>{verdictText}</div>
+                  <div style={{ background: "rgba(15,23,42,.88)", color: "#e2e8f0", font: "500 11px system-ui", padding: "2px 8px", borderRadius: 5, maxWidth: 260, textAlign: "center" }}>{holding ? proposal?.rationale : verdictText}</div>
                 )}
               </div>
             </Html>

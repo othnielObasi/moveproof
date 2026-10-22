@@ -238,9 +238,11 @@ class NemotronPlanner(GeminiPlanner):
     async def generate_plan(self, telemetry: Dict[str, Any], instruction: str,
                             goal: Optional[Dict[str, float]] = None,
                             preferred_model: Optional[str] = None,
-                            lessons: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                            lessons: Optional[List[Dict[str, Any]]] = None,
+                            untrusted_context: str = "") -> Dict[str, Any]:
         """Mission planning and replanning run on the reasoning tier (Nemotron Ultra)."""
         with reasoning_tier():
-            plan = await super().generate_plan(telemetry, instruction, goal, preferred_model, lessons=lessons)
+            plan = await super().generate_plan(telemetry, instruction, goal, preferred_model, lessons=lessons,
+                                               untrusted_context=untrusted_context)
         plan["tier"] = TIER_REASONING
         return plan

@@ -60,7 +60,12 @@ POLICY_DESCRIPTIONS = {
     "HITL_05": "risk high enough to need operator review",
     "WORKER_PROXIMITY_06": "a walking worker inside the stop radius",
     "PATH_CLEARANCE_07": "a straight path through racking",
+    "HAZARD_EXCLUSION_08": "a move into a hazard exclusion zone",
+    "HAZARD_SLOW_09": "too fast near a hazard zone",
 }
+
+# Temporary hazards (a spill is cleaned up) must not become lessons about a place.
+TRANSIENT_POLICIES = {"HAZARD_EXCLUSION_08", "HAZARD_SLOW_09"}
 
 ADVICE = {
     "HUMAN_PROXIMITY_02": "People are often here: approach slowly and prefer a route with more clearance.",
@@ -157,6 +162,9 @@ def distill_run(db: Session, run_id: str) -> List[Dict[str, Any]]:
             continue
 
         if r.decision not in _DENIED:
+            continue
+        hits = [h for h in hits if h not in TRANSIENT_POLICIES]
+        if not hits:
             continue
         for policy in hits or ["UNSPECIFIED"]:
             if policy == "CIRCUIT_BREAKER":

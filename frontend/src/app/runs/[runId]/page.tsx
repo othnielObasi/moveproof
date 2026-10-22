@@ -5,6 +5,7 @@ import { getRun, listEvents, stopRun, operatorOverride, getWorld, getTelemetry, 
 import { Map2D } from "@/components/Map2D";
 import dynamic from "next/dynamic";
 import { ScoreCard } from "@/components/ScoreCard";
+import { SiteIntelPanel } from "@/components/SiteIntelPanel";
 import { IntrospectionPanel } from "@/components/IntrospectionPanel";
 import { wsUrlForRun } from "@/lib/ws";
 import type { WsMessage } from "@/lib/types";
@@ -1399,14 +1400,14 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                     <span className="text-slate-500 min-w-[65px]">Policies:</span>
                     <span className="text-slate-300 font-mono">{(lastDecision.governance?.policy_hits || []).length > 0
                       ? (lastDecision.governance.policy_hits).join(", ")
-                      : <span className="text-green-400">✓ 0 violations (8 active)</span>}</span>
+                      : <span className="text-green-400">✓ 0 violations (10 active)</span>}</span>
                   </div>
                 </div>
                 )}
                 {lastDecision.governance?.decision === "APPROVED" && !isFullscreen && (
                   <div className="bg-green-500/5 border border-green-500/20 rounded p-2 space-y-1">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-green-400 font-semibold text-[10px] uppercase tracking-wider">All 8 Policies Passed</span>
+                      <span className="text-green-400 font-semibold text-[10px] uppercase tracking-wider">All 10 Policies Passed</span>
                       <span className="text-[10px] text-green-400/60 font-mono">0 denied · 0 constrained</span>
                     </div>
                     {[
@@ -1418,6 +1419,9 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                       { label: "UNCERTAINTY_04", check: "confidence above threshold" },
                       { label: "HITL_05", check: "no operator override required" },
                       { label: "WORKER_PROXIMITY_06", check: telemetry?.human_distance_m ? `worker zone clear (${telemetry.human_distance_m.toFixed(1)}m)` : "worker zone clear" },
+                      { label: "PATH_CLEARANCE_07", check: "path clear of racking" },
+                      { label: "HAZARD_EXCLUSION_08", check: telemetry?.site_constraints?.length ? `outside ${telemetry.site_constraints.length} hazard zone(s)` : "no hazard zones in force" },
+                      { label: "HAZARD_SLOW_09", check: telemetry?.site_constraints?.length ? "within hazard speed caps" : "no hazard speed caps" },
                     ].map((item, i) => (
                       <div key={i} className="flex items-center gap-1.5">
                         <span className="text-green-500 text-[10px]">✓</span>
@@ -1441,6 +1445,9 @@ export default function RunPage({ params }: { params: { runId: string } }) {
               </div>
             )}
           </Card>
+
+          {/* Tavily site intelligence (untrusted input) */}
+          <SiteIntelPanel />
 
           {/* Compact Telemetry */}
           <CollapsibleCard title="Live Telemetry" defaultOpen={false}>

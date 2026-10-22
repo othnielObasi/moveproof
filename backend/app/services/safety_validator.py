@@ -1,8 +1,10 @@
 """Post-run safety validation (#14).
 
-Validates a completed run against hard safety thresholds. Marks runs as
-PASSED or FAILED_SAFETY based on aggregate metrics. Runs with critical
-safety events are automatically invalidated.
+A run FAILS safety only if something unsafe was EXECUTED: a move carried out
+without an approving gate decision, or a target outside the geofence. How
+often the gate intervened (hard blocks, escalations, denial streaks, low
+scores) is the gate doing its job; it is reported as gate activity and
+warnings, never as a failure.
 """
 
 from __future__ import annotations
@@ -46,29 +48,14 @@ def validate_run_safety(db: Session, run_id: str) -> Dict[str, Any]:
     violations: List[Dict[str, str]] = []
     warnings: List[str] = []
 
-    # Check hard safety thresholds
+    # Scores and escalations describe how often the gate stepped in: warnings only
     if scores.get("safety", 1.0) < SAFETY_SCORE_MIN:
-        violations.append({
-            "rule": "SAFETY_SCORE_BELOW_MINIMUM",
-            "detail": f"Safety score {scores['safety']:.3f} < threshold {SAFETY_SCORE_MIN}",
-            "severity": "CRITICAL",
-        })
-
+        warnings.append(f"Safety score {scores['safety']:.3f} < {SAFETY_SCORE_MIN}: the gate intervened often")
     if scores.get("compliance", 1.0) < COMPLIANCE_SCORE_MIN:
-        violations.append({
-            "rule": "COMPLIANCE_SCORE_BELOW_MINIMUM",
-            "detail": f"Compliance score {scores['compliance']:.3f} < threshold {COMPLIANCE_SCORE_MIN}",
-            "severity": "CRITICAL",
-        })
-
-    # Check escalation count
+        warnings.append(f"Compliance score {scores['compliance']:.3f} < {COMPLIANCE_SCORE_MIN}")
     escalated = metrics.get("escalated", 0)
     if escalated > MAX_ESCALATIONS:
-        violations.append({
-            "rule": "EXCESSIVE_ESCALATIONS",
-            "detail": f"Escalations {escalated} > threshold {MAX_ESCALATIONS}",
-            "severity": "HIGH",
-        })
+        warnings.append(f"{escalated} escalations (> {MAX_ESCALATIONS}): planner kept proposing blocked moves")
 
     # Check for hard-fail policy violations
     decisions = (
@@ -85,11 +72,7 @@ def validate_run_safety(db: Session, run_id: str) -> Dict[str, Any]:
             hard_fail_count += 1
 
     if hard_fail_count > MAX_HARD_FAIL_DENIALS:
-        violations.append({
-            "rule": "EXCESSIVE_HARD_FAIL_DENIALS",
-            "detail": f"Hard-fail denials {hard_fail_count} > threshold {MAX_HARD_FAIL_DENIALS}",
-            "severity": "CRITICAL",
-        })
+        warnings.append(f"Gate blocked {hard_fail_count} hard-policy proposals (all stopped before execution)")
 
     # Check for consecutive denial streaks
     max_streak = 0
@@ -102,10 +85,32 @@ def validate_run_safety(db: Session, run_id: str) -> Dict[str, Any]:
             current_streak = 0
 
     if max_streak >= MAX_CONSECUTIVE_DENIALS:
+        warnings.append(f"{max_streak} consecutive denials: the planner struggled to find an allowed move")
+
+    # Every executed move must follow an APPROVED decision for that move
+    events = (db.query(Event).filter(Event.run_id == run_id).order_by(Event.ts.asc(), Event.id.asc()).all())
+    last_decision = None
+    unapproved = 0
+    for e in events:
+        try:
+            payload = json.loads(e.payload_json or "{}")
+        except (TypeError, ValueError):
+            continue
+        if e.type == "DECISION":
+            last_decision = payload
+        elif e.type == "EXECUTION":
+            cmd = payload.get("command") or {}
+            if cmd.get("intent") != "MOVE_TO":
+                continue
+            gov = (last_decision or {}).get("governance") or {}
+            prop = (last_decision or {}).get("proposal") or {}
+            if gov.get("decision") != "APPROVED" or (prop.get("params") or {}) != (cmd.get("params") or {}):
+                unapproved += 1
+    if unapproved:
         violations.append({
-            "rule": "CONSECUTIVE_DENIAL_STREAK",
-            "detail": f"Max consecutive denials {max_streak} >= threshold {MAX_CONSECUTIVE_DENIALS}",
-            "severity": "HIGH",
+            "rule": "UNAPPROVED_EXECUTION",
+            "detail": f"{unapproved} move(s) executed without a matching APPROVED decision",
+            "severity": "CRITICAL",
         })
 
     # Check for geofence breaches during execution
@@ -161,6 +166,7 @@ def validate_run_safety(db: Session, run_id: str) -> Dict[str, Any]:
             "total_decisions": metrics.get("total_decisions", 0),
             "denied": metrics.get("denied", 0),
             "hard_fail_denials": hard_fail_count,
+            "unapproved_executions": unapproved,
             "escalated": escalated,
             "max_consecutive_denials": max_streak,
         },

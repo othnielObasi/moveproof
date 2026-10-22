@@ -127,6 +127,13 @@ class GovernanceEngine:
                 if isinstance(w, dict)
             ],
         }
+        if telemetry.get("site_constraints"):
+            # Hazard zones in force for this decision (geometry and limits only)
+            tel_summary["site_constraints"] = [
+                {k: (round(float(z[k]), 3) if k in ("x", "y", "radius", "slow_radius", "max_speed") else z[k])
+                 for k in ("id", "x", "y", "radius", "slow_radius", "max_speed", "label") if k in z}
+                for z in (telemetry.get("site_constraints") or [])[:10] if isinstance(z, dict)
+            ]
 
         # Persist decision record
         ts = utc_now()

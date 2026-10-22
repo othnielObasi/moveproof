@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     # governance denial. Model IDs are configurable because Token Factory's
     # catalogue changes — run scripts/check_token_factory.py to list yours.
     nebius_api_key: Optional[str] = None
+
+    # Tavily: live site intelligence, always treated as untrusted input
+    tavily_api_key: Optional[str] = None
+    tavily_search_depth: str = "advanced"
+    tavily_timeout_s: float = 12.0
     nebius_base_url: str = "https://api.tokenfactory.nebius.com/v1"
     nemotron_enabled: bool = True
     nemotron_fast_models: str = "nvidia/Nemotron-3_5-Lightning,nvidia/nemotron-3-super-120b-a12b"

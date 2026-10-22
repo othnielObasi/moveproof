@@ -770,6 +770,32 @@ export function Map2D({
       if (zoom >= 1.6 || ob.type === "dropped_pallet") ctx.fillText(ot.label, p.x, p.y - bs - 3); // parked clutter: label only when zoomed in
     }
 
+    /* ── hazard exclusion zones (site intelligence) ─────────── */
+    for (const z of (telemetry?.site_constraints ?? []) as any[]) {
+      if (typeof z.x !== "number") continue;
+      const p = w2c({ x: z.x, y: z.y });
+      const r = z.radius * baseScale * zoom, sr = z.slow_radius * baseScale * zoom;
+      ctx.fillStyle = "rgba(239,68,68,0.14)";
+      ctx.strokeStyle = `rgba(239,68,68,${0.6 + pulse * 0.3})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(245,158,11,0.5)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, sr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#fecaca";
+      ctx.font = `bold ${Math.max(8, 9 * zoom)}px system-ui`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`NO ENTRY ${Number(z.radius).toFixed(1)}m`, p.x, p.y - r - 2);
+    }
+
     /* ── human ──────────────────────────────────────────────── */
     if (human && typeof human.x === "number") {
       const p = w2c({ x: +human.x, y: +human.y });

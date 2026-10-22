@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Dict, Any, Tuple, List
 from app.schemas.governance import GovernanceDecision, ActionProposal
 from app.policies.params import DEFAULT_PARAMS, active_params
@@ -33,13 +34,23 @@ HARD_FAIL_POLICIES = frozenset({
     "WORKER_PROXIMITY_06",  # Worker within stop radius — must stop immediately
     "OBSTACLE_CLEARANCE_03",  # Collision imminent — hard stop
     "PATH_CLEARANCE_07",    # Straight path runs through racking — replan along the aisles
+    "HAZARD_EXCLUSION_08",  # Move enters or crosses a hazard exclusion zone — replan around it
 })
 SOFT_FAIL_POLICIES = frozenset({
     "SAFE_SPEED_01",        # Speed violation — can slow down
     "HUMAN_CLEARANCE_02",   # Near human — reduce speed
     "UNCERTAINTY_04",       # Low confidence — proceed cautiously
     "HITL_05",              # High risk threshold — operator review
+    "HAZARD_SLOW_09",       # Too fast near a hazard zone — slow down
 })
+
+
+def _segment_distance(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
+    """Shortest distance from point P to segment AB."""
+    dx, dy = bx - ax, by - ay
+    L2 = dx * dx + dy * dy
+    t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / L2))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 
 
 def evaluate_policies(
@@ -135,6 +146,43 @@ def evaluate_policies(
             required_action = "Replan along the aisles."
             risk_score = max(risk_score, 0.9)
             policy_state = "REPLAN"
+
+    # --- HAZARD_EXCLUSION_08 / HAZARD_SLOW_09: temporary zones round hazards ---
+    # Zones only ever restrict motion; the gate reads their geometry and limits,
+    # never the outside text they were derived from.
+    if intent == "MOVE_TO" and "x" in params and "y" in params:
+        tx, ty = float(params["x"]), float(params["y"])
+        for z in telemetry.get("site_constraints") or []:
+            try:
+                zx, zy, zr = float(z["x"]), float(z["y"]), float(z["radius"])
+                zs, zv = float(z.get("slow_radius", zr)), float(z.get("max_speed", 0.3))
+            except (KeyError, TypeError, ValueError):
+                continue
+            label = str(z.get("label", "hazard"))
+            here = math.hypot(x - zx, y - zy)
+            there = math.hypot(tx - zx, ty - zy)
+            closest = _segment_distance(zx, zy, x, y, tx, ty)
+            inside = here < zr
+            leaving = inside and there > here and closest >= here - 1e-6
+            if (not inside and closest < zr) or (inside and not leaving):
+                policy_hits.append("HAZARD_EXCLUSION_08")
+                reasons.append(f"Move would enter the {zr:.1f} m exclusion zone round the {label}.")
+                required_action = "Replan around the hazard zone."
+                risk_score = max(risk_score, 0.92)
+                policy_state = "REPLAN"
+            elif leaving and max_speed > zv:
+                policy_hits.append("HAZARD_EXCLUSION_08")
+                reasons.append(f"Leaving the {label} zone must be at <= {zv:.2f} m/s (requested {max_speed:.2f}).")
+                required_action = f"Back out of the zone at <= {zv:.2f} m/s."
+                risk_score = max(risk_score, 0.9)
+                policy_state = "STOP"
+            elif min(here, closest) < zs and max_speed > zv:
+                policy_hits.append("HAZARD_SLOW_09")
+                reasons.append(f"Within {zs:.1f} m of the {label}: speed {max_speed:.2f} exceeds {zv:.2f} m/s.")
+                required_action = f"Reduce speed to <= {zv:.2f} near the hazard."
+                risk_score = max(risk_score, 0.78)
+                if policy_state == "SAFE":
+                    policy_state = "SLOW"
 
     # --- HUMAN / WORKER PROXIMITY ---
     # Prefer worker (walking_humans) proximity if one is nearer; otherwise use primary human

@@ -68,6 +68,7 @@ class RunService:
         self._stagnant_counts: Dict[str, int] = {}  # consecutive low-movement ticks
         self.STAGNATION_THRESHOLD_M = 0.02  # metres: movement below this = stagnant
         self.STAGNATION_CYCLES = 10         # ticks: emit STAGNATION alert after this many
+        self._hazard_holds: Dict[str, str] = {}  # run_id -> why the robot is holding for a hazard
 
         # --- Replan-on-denial ---
         self._wp_denial_counts: Dict[str, int] = {}  # consecutive governance denials
@@ -425,6 +426,16 @@ class RunService:
 
                     telemetry = await self.sim.get_telemetry()
 
+                    # Site intelligence: hazard zones (Tavily-informed, firewall-screened)
+                    # join the telemetry the gate sees; their audit events join this run's chain.
+                    try:
+                        from app.services.site_intel.service import site_intel
+                        telemetry = site_intel.observe(telemetry)
+                        for etype, epayload in site_intel.drain_events():
+                            self._append_event(db, run_id, etype, epayload)
+                    except Exception as si_err:
+                        logger.warning("Run %s: site intel failed: %s", run_id, si_err)
+
                     # --- Anti-spoofing: validate telemetry plausibility ---
                     if run_id not in self._tel_validators:
                         self._tel_validators[run_id] = TelemetryValidator(run_id)
@@ -533,7 +544,8 @@ class RunService:
                         # Plan used up before the goal: route the rest along the aisles rather than straight at it
                         try:
                             from app.services.site_router import route_plan
-                            routed = route_plan(await self.sim.get_world(), telemetry, goal, ZONE_SPEED_LIMITS)
+                            routed = route_plan(await self.sim.get_world(), telemetry, goal, ZONE_SPEED_LIMITS,
+                                                hazards=telemetry.get("site_constraints"))
                         except Exception as route_err:
                             routed = None
                             logger.warning("Run %s: aisle routing failed: %s", run_id, route_err)
@@ -541,8 +553,51 @@ class RunService:
                             async with self._plans_lock:
                                 self._plans[run_id] = routed
                             wp = routed[0]
+                    # Hazard zones: back out if inside one; route round one; hold if no route
+                    hazard_proposal = None
+                    hold_reason = None
+                    zones = telemetry.get("site_constraints") or []
+                    if zones:
+                        from app.services.site_router import crosses_hazard, hazard_exit_point
+                        rx_, ry_ = float(telemetry.get("x", 0)), float(telemetry.get("y", 0))
+                        inside_z = next((z for z in zones if math.hypot(rx_ - float(z["x"]), ry_ - float(z["y"])) < float(z["radius"])), None)
+                        if inside_z:
+                            site_w = await self.sim.get_world()
+                            exit_pt = hazard_exit_point(site_w, rx_, ry_, inside_z)
+                            if exit_pt:
+                                hazard_proposal = ActionProposal(
+                                    intent="MOVE_TO",
+                                    params={"x": exit_pt[0], "y": exit_pt[1], "max_speed": min(float(inside_z["max_speed"]), 0.2)},
+                                    rationale=f"Backing slowly out of the {inside_z.get('label', 'hazard')} zone",
+                                )
+                            else:
+                                hold_reason = f"Inside the {inside_z.get('label', 'hazard')} zone with no clear way out — holding for the operator"
+                        elif wp and crosses_hazard(telemetry, [wp], zones):
+                            from app.services.site_router import route_plan as _rp
+                            around = _rp(await self.sim.get_world(), telemetry, goal, ZONE_SPEED_LIMITS, hazards=zones)
+                            if around:
+                                async with self._plans_lock:
+                                    self._plans[run_id] = around
+                                wp = around[0]
+                            else:
+                                blocking = next((z for z in zones if crosses_hazard(telemetry, [wp], [z])), zones[0])
+                                hold_reason = (f"Every route to the goal passes through the {blocking.get('label', 'hazard')} zone — "
+                                               "holding until it is cleared")
+                    if hold_reason:
+                        hazard_proposal = ActionProposal(intent="WAIT", params={"seconds": 1}, rationale=hold_reason)
+                        self._stagnant_counts[run_id] = 0      # holding on purpose, not stalled
+                        if self._hazard_holds.get(run_id) != hold_reason:
+                            self._hazard_holds[run_id] = hold_reason
+                            self._append_event(db, run_id, "ALERT", {"event": "HAZARD_HOLD", "reason": hold_reason})
+                            if self._ws_broadcast:
+                                await self._ws_broadcast(run_id, {"kind": "alert", "data": {"event": "HAZARD_HOLD", "reason": hold_reason}})
+                    elif self._hazard_holds.pop(run_id, None):
+                        self._append_event(db, run_id, "ALERT", {"event": "HAZARD_HOLD_RELEASED", "reason": "Route clear again — resuming"})
+
                     near_xy = telemetry.get("nearest_obstacle_xy")
-                    if (last_governance and "OBSTACLE_CLEARANCE_03" in (last_governance.get("policy_hits") or [])
+                    if hazard_proposal is not None:
+                        proposal = hazard_proposal
+                    elif (last_governance and "OBSTACLE_CLEARANCE_03" in (last_governance.get("policy_hits") or [])
                             and near_xy and float(telemetry.get("nearest_obstacle_m", 9.0)) < 0.5):
                         # Too close to something: back away slowly (the one move the gate allows here)
                         ax_, ay_ = float(telemetry.get("x", 0)) - float(near_xy[0]), float(telemetry.get("y", 0)) - float(near_xy[1])
@@ -582,6 +637,12 @@ class RunService:
                         human_dist = float(telemetry.get("human_distance_m", 999.0))
                         if human_dist < 3.0:
                             clamped = min(clamped, 0.3)
+                        # And near hazard zones (the gate enforces this too)
+                        from app.services.site_router import capped_speed
+                        clamped = capped_speed(float(telemetry.get("x", 0)), float(telemetry.get("y", 0)), clamped,
+                                               telemetry.get("site_constraints"))
+                        if "x" in p and "y" in p:
+                            clamped = capped_speed(float(p["x"]), float(p["y"]), clamped, telemetry.get("site_constraints"))
                         p["max_speed"] = clamped
                         proposal.params = p
 
@@ -797,19 +858,31 @@ class RunService:
                                 except Exception as les_err:
                                     logger.warning("Run %s: lesson retrieval failed: %s", run_id, les_err)
                                 planner = self.agent._gemini_planner()
-                                new_plan = await planner.generate_plan(telemetry, replan_instruction, goal, lessons=lessons)
+                                from app.services.site_intel.service import site_intel as _si
+                                try:
+                                    new_plan = await planner.generate_plan(telemetry, replan_instruction, goal, lessons=lessons,
+                                                                           untrusted_context=_si.planner_context())
+                                except TypeError:  # planners without the parameter
+                                    new_plan = await planner.generate_plan(telemetry, replan_instruction, goal, lessons=lessons)
                                 try:
                                     from app.services.site_router import repair_plan, route_plan
                                     site = await self.sim.get_world()
                                     if new_plan.get("model_used") == "deterministic_fallback":
                                         # No model: route around the blocked spot along the aisles
-                                        routed = route_plan(site, telemetry, goal, ZONE_SPEED_LIMITS, avoid=blocked_wp)
+                                        routed = route_plan(site, telemetry, goal, ZONE_SPEED_LIMITS, avoid=blocked_wp,
+                                                            hazards=telemetry.get("site_constraints"))
                                         if routed:
                                             new_plan.update(waypoints=routed, model_used="site_router")
                                     else:
                                         fixed, n_fixed = repair_plan(site, telemetry, new_plan.get("waypoints", []), ZONE_SPEED_LIMITS)
                                         if n_fixed:
                                             new_plan.update(waypoints=fixed, repaired_legs=n_fixed)
+                                        from app.services.site_router import crosses_hazard
+                                        zones = telemetry.get("site_constraints")
+                                        if zones and crosses_hazard(telemetry, new_plan.get("waypoints", []), zones):
+                                            routed = route_plan(site, telemetry, goal, ZONE_SPEED_LIMITS, hazards=zones)
+                                            if routed:
+                                                new_plan.update(waypoints=routed, hazard_rerouted=True)
                                 except Exception as route_err:
                                     logger.warning("Run %s: replan routing skipped: %s", run_id, route_err)
                                 new_wps = new_plan.get("waypoints", [])
