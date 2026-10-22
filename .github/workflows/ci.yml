@@ -57,3 +57,6 @@ jobs:
       
       - name: Build simulator image
         run: docker build -t moveproof-sim ./sim/mock_sim
+
+      - name: Build warehouse simulator image
+        run: docker build -f sim/warehouse_sim/Dockerfile -t moveproof-warehouse-sim .

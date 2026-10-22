@@ -22,6 +22,7 @@ of a mission).  Key responsibilities:
 """
 
 import asyncio
+import math
 import json
 import logging
 from typing import Any, Dict, List, Optional
@@ -71,6 +72,7 @@ class RunService:
         # --- Replan-on-denial ---
         self._wp_denial_counts: Dict[str, int] = {}  # consecutive governance denials
         self.REPLAN_DENIAL_THRESHOLD = 5  # trigger LLM re-plan after N consecutive denials
+        self.WAYPOINT_REACHED_M = 0.6     # a plan waypoint counts as reached within this distance
 
         # --- Executed path tracking (for UI visualisation & scoring) ---
         self._executed_paths: Dict[str, List[Dict[str, Any]]] = {}
@@ -516,15 +518,46 @@ class RunService:
                     proposal: ActionProposal
                     nl_task = mission.title if mission else "Navigate to goal"
 
-                    # Snapshot plan under lock to avoid races with LLM plan upgrades
+                    # Snapshot plan under lock to avoid races with LLM plan upgrades.
+                    # A waypoint is done when the robot reaches it, not when it is commanded:
+                    # skipping ahead let the robot cut corners straight through racking.
                     async with self._plans_lock:
                         plan_wps = self._plans.get(run_id)
+                        tx_, ty_ = float(telemetry.get("x", 0)), float(telemetry.get("y", 0))
+                        while plan_wps and len(plan_wps) > 1 and math.hypot(
+                                float(plan_wps[0].get("x", 0)) - tx_, float(plan_wps[0].get("y", 0)) - ty_) < self.WAYPOINT_REACHED_M:
+                            plan_wps.pop(0)
                         wp = plan_wps[0] if plan_wps else None
-                    if wp:
+                    if not wp and goal and math.hypot(float(telemetry.get("x", 0)) - float(goal.get("x", 0)),
+                                                      float(telemetry.get("y", 0)) - float(goal.get("y", 0))) > 0.5:
+                        # Plan used up before the goal: route the rest along the aisles rather than straight at it
+                        try:
+                            from app.services.site_router import route_plan
+                            routed = route_plan(await self.sim.get_world(), telemetry, goal, ZONE_SPEED_LIMITS)
+                        except Exception as route_err:
+                            routed = None
+                            logger.warning("Run %s: aisle routing failed: %s", run_id, route_err)
+                        if routed:
+                            async with self._plans_lock:
+                                self._plans[run_id] = routed
+                            wp = routed[0]
+                    near_xy = telemetry.get("nearest_obstacle_xy")
+                    if (last_governance and "OBSTACLE_CLEARANCE_03" in (last_governance.get("policy_hits") or [])
+                            and near_xy and float(telemetry.get("nearest_obstacle_m", 9.0)) < 0.5):
+                        # Too close to something: back away slowly (the one move the gate allows here)
+                        ax_, ay_ = float(telemetry.get("x", 0)) - float(near_xy[0]), float(telemetry.get("y", 0)) - float(near_xy[1])
+                        n_ = math.hypot(ax_, ay_) or 1e-9
+                        proposal = ActionProposal(
+                            intent="MOVE_TO",
+                            params={"x": float(telemetry.get("x", 0)) + ax_ / n_ * 0.8,
+                                    "y": float(telemetry.get("y", 0)) + ay_ / n_ * 0.8, "max_speed": 0.25},
+                            rationale="Slow retreat from obstacle",
+                        )
+                    elif wp:
                         proposal = ActionProposal(
                             intent="MOVE_TO",
                             params={"x": float(wp.get("x")), "y": float(wp.get("y")), "max_speed": float(wp.get("max_speed", 0.5))},
-                            rationale="Following LLM plan waypoint",
+                            rationale="Following plan waypoint",
                         )
                     else:
                         # No plan — agent proposes action (may call LLM)
@@ -636,25 +669,36 @@ class RunService:
                             "ts": utc_now().isoformat(),
                         })
 
-                        # If we executed a planned waypoint, remove it from the plan
-                        if wp:
-                            async with self._plans_lock:
-                                try:
-                                    cur = self._plans.get(run_id)
-                                    if cur:
-                                        cur.pop(0)
-                                        if not cur:
-                                            self._plans.pop(run_id, None)
-                                except Exception:
-                                    pass
+                        # The waypoint stays in the plan until the robot reaches it (checked each
+                        # tick above), so every tick re-submits the move to the gate.
+                        if wp and len(self._plans.get(run_id) or []) == 1:
+                            gx_, gy_ = float(wp.get("x", 0)), float(wp.get("y", 0))
+                            if math.hypot(gx_ - float(telemetry.get("x", 0)), gy_ - float(telemetry.get("y", 0))) < self.WAYPOINT_REACHED_M:
+                                async with self._plans_lock:
+                                    self._plans.pop(run_id, None)
                     else:
-                        # Denied or NEEDS_REVIEW — increment waypoint denial counter
+                        # Denied or NEEDS_REVIEW: stop the robot. Without this the simulator kept
+                        # driving to the last approved target, so a denial only withheld a new one.
+                        try:
+                            stop_ack = await self.sim.send_command({"intent": "STOP", "params": {}})
+                        except Exception as stop_err:
+                            stop_ack = {"ok": False, "error": str(stop_err)}
+                        self._append_event(db, run_id, "EXECUTION", {
+                            "command": {"intent": "STOP", "params": {}},
+                            "result": stop_ack,
+                            "verified": bool(stop_ack.get("ok") or stop_ack.get("stopped")),
+                            "enforced_by_gate": True,
+                            "decision": gov_decision.decision,
+                            "policy_hits": gov_decision.policy_hits,
+                        })
+
+                        # Increment waypoint denial counter
                         self._wp_denial_counts[run_id] = self._wp_denial_counts.get(run_id, 0) + 1
                         denial_count = self._wp_denial_counts[run_id]
 
                         # NEEDS_REVIEW: execute cautiously at reduced speed (soft policy hit)
                         # Only pause if NEEDS_REVIEW persists for too many consecutive ticks
-                        if gov_decision.decision == "NEEDS_REVIEW":
+                        if gov_decision.decision == "NEEDS_REVIEW" and not gov_decision.hard_fail:
                             NEEDS_REVIEW_PAUSE_THRESHOLD = 5  # pause after 5 consecutive NEEDS_REVIEW
                             if denial_count >= NEEDS_REVIEW_PAUSE_THRESHOLD:
                                 logger.warning("Run %s: %d consecutive NEEDS_REVIEW — pausing for operator", run_id, denial_count)
@@ -682,23 +726,36 @@ class RunService:
                                     self._pause_flags[run_id] = asyncio.Event()
                                 self._pause_flags[run_id].set()
                             else:
-                                # Execute at reduced speed — governance says SLOW, not STOP
-                                logger.info("Run %s: NEEDS_REVIEW — executing cautiously (count %d)", run_id, denial_count)
-                                cautious_params = dict(proposal.params)
-                                cautious_params["max_speed"] = min(cautious_params.get("max_speed", 0.5), 0.2)
-                                cmd = {"intent": proposal.intent, "params": cautious_params}
-                                execution = await self.sim.send_command(cmd)
-                                exec_verified = execution.get("ok", False) or execution.get("ack", False)
-                                self._append_event(db, run_id, "EXECUTION", {
-                                    "command": cmd,
-                                    "result": execution,
-                                    "verified": exec_verified,
-                                    "cautious": True,
-                                    "governance_state": gov_decision.policy_state,
+                                # Soft review: try the same move slower — but only if the gate
+                                # approves that slower move too. Nothing executes unapproved.
+                                cautious_params = dict(proposal.params or {})
+                                cautious_params["max_speed"] = min(float(cautious_params.get("max_speed", 0.5)), 0.2)
+                                cautious = ActionProposal(intent=proposal.intent, params=cautious_params,
+                                                          rationale=f"{proposal.rationale} (slowed after review)")
+                                recheck = self.gov.evaluate_and_record(db, run_id, telemetry, cautious)
+                                self._append_event(db, run_id, "DECISION", {
+                                    "proposal": cautious.model_dump(),
+                                    "governance": recheck.model_dump(),
+                                    "note": "re-evaluated at reduced speed after NEEDS_REVIEW",
                                 })
-                                was_executed = True
+                                if recheck.decision == "APPROVED":
+                                    logger.info("Run %s: NEEDS_REVIEW — slower move approved (count %d)", run_id, denial_count)
+                                    self._wp_denial_counts[run_id] = 0   # the robot is moving under an approved decision
+                                    cmd = {"intent": cautious.intent, "params": cautious_params}
+                                    execution = await self.sim.send_command(cmd)
+                                    exec_verified = execution.get("ok", False) or execution.get("ack", False)
+                                    self._append_event(db, run_id, "EXECUTION", {
+                                        "command": cmd,
+                                        "result": execution,
+                                        "verified": exec_verified,
+                                        "cautious": True,
+                                        "governance_state": recheck.policy_state,
+                                    })
+                                    was_executed = True
+                                # (if not approved, the robot stays stopped)
 
-                        elif denial_count >= self.REPLAN_DENIAL_THRESHOLD and wp:
+                        elif (denial_count >= self.REPLAN_DENIAL_THRESHOLD
+                              or (gov_decision.hard_fail and denial_count >= 3)) and wp:
                             # Trigger replanning: discard blocked waypoint and request new plan
                             blocked_wp = wp
                             logger.warning(
@@ -741,6 +798,20 @@ class RunService:
                                     logger.warning("Run %s: lesson retrieval failed: %s", run_id, les_err)
                                 planner = self.agent._gemini_planner()
                                 new_plan = await planner.generate_plan(telemetry, replan_instruction, goal, lessons=lessons)
+                                try:
+                                    from app.services.site_router import repair_plan, route_plan
+                                    site = await self.sim.get_world()
+                                    if new_plan.get("model_used") == "deterministic_fallback":
+                                        # No model: route around the blocked spot along the aisles
+                                        routed = route_plan(site, telemetry, goal, ZONE_SPEED_LIMITS, avoid=blocked_wp)
+                                        if routed:
+                                            new_plan.update(waypoints=routed, model_used="site_router")
+                                    else:
+                                        fixed, n_fixed = repair_plan(site, telemetry, new_plan.get("waypoints", []), ZONE_SPEED_LIMITS)
+                                        if n_fixed:
+                                            new_plan.update(waypoints=fixed, repaired_legs=n_fixed)
+                                except Exception as route_err:
+                                    logger.warning("Run %s: replan routing skipped: %s", run_id, route_err)
                                 new_wps = new_plan.get("waypoints", [])
                                 if new_wps:
                                     async with self._plans_lock:

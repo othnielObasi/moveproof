@@ -151,6 +151,15 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
                     plan = await planner.generate_plan(telemetry, mission_title, goal, lessons=lessons)
 
                 if plan and plan.get("waypoints"):
+                    # Keep the model's waypoints but re-route any leg that would cut through racking
+                    try:
+                        from app.services.site_router import repair_plan
+                        from app.world_model import ZONE_SPEED_LIMITS as _ZL
+                        fixed, n_fixed = repair_plan(await svc.sim.get_world(), telemetry, plan["waypoints"], _ZL)
+                        if n_fixed:
+                            plan["waypoints"], plan["repaired_legs"] = fixed, n_fixed
+                    except Exception as rep_err:
+                        logger.warning("Plan repair skipped for run %s: %s", run_id, rep_err)
                     async with svc._plans_lock:
                         svc._plans[run_id] = plan["waypoints"]
                     plan_source = settings.planner_provider
@@ -316,13 +325,23 @@ async def start_run(
     except Exception:
         telemetry = {}
 
-    seed_waypoint = generate_fallback_waypoint(telemetry, json.loads(mission.goal_json))
-    svc._plans[run.id] = [seed_waypoint]
+    # Seed plan: a route along the aisles when the site map is known, else one short step
+    seed_wps = None
+    try:
+        from app.services.site_router import route_plan
+        from app.world_model import ZONE_SPEED_LIMITS as _ZL
+        if telemetry:
+            seed_wps = route_plan(await svc.sim.get_world(), telemetry, json.loads(mission.goal_json), _ZL)
+    except Exception as route_err:
+        logger.warning("Aisle routing unavailable for run %s: %s", run.id, route_err)
+    if not seed_wps:
+        seed_wps = [generate_fallback_waypoint(telemetry, json.loads(mission.goal_json))]
+    svc._plans[run.id] = seed_wps
     svc._append_event(db, run.id, "PLAN", {
         "mission_id": mission.id,
-        "plan": {"waypoints": [seed_waypoint]},
+        "plan": {"waypoints": seed_wps, "model_used": "site_router" if len(seed_wps) > 1 else "step_fallback"},
         "source": "fallback",
-        "note": "Seed fallback plan — LLM plan pending",
+        "note": "Seed plan along the aisles — model plan pending" if len(seed_wps) > 1 else "Seed fallback plan — LLM plan pending",
     })
     db.commit()
 

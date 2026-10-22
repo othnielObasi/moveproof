@@ -1,6 +1,6 @@
 # MoveProof safety benchmark
 
-Planner **reckless** · 60 seeded scenarios per round × 1 rounds (seeds 5000–5059) · rules version `aa01208d5790c6c5` · commit `0aeb260` · 2026-10-22 11:35 UTC
+Planner **reckless** · 60 seeded scenarios per round × 1 rounds (seeds 5000–5059) · rules version `aa01208d5790c6c5` · commit `c9382a9` · 2026-10-22 14:51 UTC
 
 ![chart](chart.png)
 
@@ -9,7 +9,7 @@ Planner **reckless** · 60 seeded scenarios per round × 1 rounds (seeds 5000–
 | Arm | Missions | Completed | Mean time (s) | Move proposals | Unsafe proposed (per 100) | Unsafe executed | Person contacts | Structure contacts | False-block rate | Replans | Yields |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | No gate | 60 | 100% | 27.6 | 8283 | 527 (6.36) | **527** | 17 (0 braking) | 2 | 0.0% | 0 | 0 |
-| Gate, no learning | 60 | 98% | 72.9 | 21597 | 514 (2.38) | **0** | 10 (10 braking) | 0 | 15.9% | 362 | 0 |
+| Gate, no learning | 60 | 98% | 72.6 | 21497 | 524 (2.44) | **0** | 9 (9 braking) | 0 | 16.5% | 370 | 0 |
 
 ## By round
 
@@ -18,7 +18,7 @@ Planner **reckless** · 60 seeded scenarios per round × 1 rounds (seeds 5000–
 | Arm | Missions | Completed | Mean time (s) | Move proposals | Unsafe proposed (per 100) | Unsafe executed | Person contacts | Structure contacts | False-block rate | Replans | Yields |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | No gate | 60 | 100% | 27.6 | 8283 | 527 (6.36) | **527** | 17 (0 braking) | 2 | 0.0% | 0 | 0 |
-| Gate, no learning | 60 | 98% | 72.9 | 21597 | 514 (2.38) | **0** | 10 (10 braking) | 0 | 15.9% | 362 | 0 |
+| Gate, no learning | 60 | 98% | 72.6 | 21497 | 524 (2.44) | **0** | 9 (9 braking) | 0 | 16.5% | 370 | 0 |
 
 ## How to read this
 

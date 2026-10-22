@@ -220,6 +220,7 @@ class Walker:
     pos: Tuple[float, float] = (0.0, 0.0)
     pause_until: float = 0.0
     done: bool = False
+    blocked_s: float = 0.0
 
     def __post_init__(self):
         self.pos = self.route[0]
@@ -234,7 +235,12 @@ class Walker:
             rx, ry = robot_xy[0] - self.pos[0], robot_xy[1] - self.pos[1]
             ahead = (hx * rx + hy * ry) > 0
             if ahead and math.hypot(rx, ry) - self.radius - ROBOT_R < 2.0:
+                self.blocked_s += dt
+                if self.blocked_s > 6.0:   # driver gives up waiting and turns back
+                    self.route = [self.pos] + list(reversed(self.route[: self.idx + 1]))
+                    self.idx, self.blocked_s = 0, 0.0
                 return
+            self.blocked_s = 0.0
         if self.idx + 1 >= len(self.route):
             if self.loop:
                 self.idx = 0

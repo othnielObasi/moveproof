@@ -47,6 +47,11 @@ class SimWorld(BaseModel):
     walking_humans: List[Dict[str, Any]] = []
     idle_robots: List[Dict[str, Any]] = []
     bays: List[Dict[str, Any]] = []
+    racks: List[Dict[str, Any]] = []
+    features: List[Dict[str, Any]] = []
+    hotspots: List[Dict[str, Any]] = []
+    mode: Optional[str] = None
+    seed: Optional[int] = None
 
 
 class PathPreview(BaseModel):

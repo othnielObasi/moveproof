@@ -4,6 +4,7 @@ from typing import Dict, Any, Tuple, List
 from app.schemas.governance import GovernanceDecision, ActionProposal
 from app.policies.params import DEFAULT_PARAMS, active_params
 from app.policies.retreat import is_slow_retreat
+from app.policies.site_map import path_blocked
 
 
 # --- Policy parameters ---
@@ -31,6 +32,7 @@ HARD_FAIL_POLICIES = frozenset({
     "HUMAN_PROXIMITY_02",   # Human within stop radius — must stop immediately
     "WORKER_PROXIMITY_06",  # Worker within stop radius — must stop immediately
     "OBSTACLE_CLEARANCE_03",  # Collision imminent — hard stop
+    "PATH_CLEARANCE_07",    # Straight path runs through racking — replan along the aisles
 })
 SOFT_FAIL_POLICIES = frozenset({
     "SAFE_SPEED_01",        # Speed violation — can slow down
@@ -123,6 +125,16 @@ def evaluate_policies(
         required_action = "Stop and replan with safer clearance."
         risk_score = max(risk_score, 0.9)
         policy_state = "REPLAN"
+
+    # --- PATH_CLEARANCE_07: the straight path must not run through permanent racking ---
+    if intent == "MOVE_TO" and "x" in params and "y" in params:
+        blocked_by = path_blocked(x, y, float(params["x"]), float(params["y"]))
+        if blocked_by:
+            policy_hits.append("PATH_CLEARANCE_07")
+            reasons.append(f"Path to ({float(params['x']):.1f},{float(params['y']):.1f}) runs through rack {blocked_by}.")
+            required_action = "Replan along the aisles."
+            risk_score = max(risk_score, 0.9)
+            policy_state = "REPLAN"
 
     # --- HUMAN / WORKER PROXIMITY ---
     # Prefer worker (walking_humans) proximity if one is nearer; otherwise use primary human

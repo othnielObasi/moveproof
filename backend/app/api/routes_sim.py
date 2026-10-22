@@ -19,7 +19,7 @@ sim = SimAdapter()
 
 class ScenarioIn(BaseModel):
     scenario: str = Field(
-        ..., description="human_approach|human_too_close|path_blocked|clear"
+        ..., description="human_approach|human_too_close|path_blocked|spill|forklift_crossing|clear"
     )
 
 
@@ -39,6 +39,31 @@ async def get_world():
         return await sim.get_world()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"sim error: {e}")
+
+
+@router.get("/sim/frame")
+async def get_frame(size: int = 512):
+    """The robot's camera view (PNG): heading-up, top-down, around the robot."""
+    from fastapi import Response
+    try:
+        png = await sim.get_frame(size=max(128, min(size, 1024)))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"sim error (needs the warehouse simulator): {e}")
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+class SeedIn(BaseModel):
+    seed: int
+    mode: str = Field("benchmark", pattern="^(benchmark|live)$")
+
+
+@router.post("/sim/seed")
+async def load_seed(body: SeedIn):
+    """Replay a benchmark scenario exactly (mode=benchmark) or load another live site (mode=live)."""
+    try:
+        return await sim.load_seed(body.seed, body.mode)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"sim error (needs the warehouse simulator): {e}")
 
 
 @router.get("/bays")

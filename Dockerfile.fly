@@ -27,8 +27,8 @@ RUN pip install --no-cache-dir psycopg2-binary>=2.9.9
 
 # Install simulator deps (it uses requirements.txt)
 WORKDIR /app
-COPY sim/mock_sim/requirements.txt /app/sim/mock_sim/requirements.txt
-RUN pip install -r /app/sim/mock_sim/requirements.txt
+COPY sim/warehouse_sim/requirements.txt /app/sim/warehouse_sim/requirements.txt
+RUN pip install -r /app/sim/warehouse_sim/requirements.txt
 
 # Procfile runner
 RUN pip install honcho==1.1.0

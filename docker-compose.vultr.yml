@@ -8,7 +8,7 @@
 #   frontend — Next.js (SSR, serves UI, proxies /api to backend)
 #   backend  — FastAPI (8080), runs Alembic migrations on start
 #   db       — PostgreSQL 16, data persisted via named volume
-#   sim      — Mock robot simulator (8090), no public exposure
+#   sim      — Warehouse simulator (8090), no public exposure
 #
 # Usage:
 #   POSTGRES_PASSWORD=... GEMINI_API_KEY=... docker compose -f docker-compose.vultr.yml up -d
@@ -126,13 +126,12 @@ services:
 
   sim:
     build:
-      context: ./sim/mock_sim
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: sim/warehouse_sim/Dockerfile
     environment:
       SIM_TICK_HZ: "10"
+      SIM_SEED: "42"
       SIM_TOKEN: "${SIM_TOKEN}"
-    command: >
-      uvicorn server:app --host 0.0.0.0 --port 8090
     restart: always
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=5)"]

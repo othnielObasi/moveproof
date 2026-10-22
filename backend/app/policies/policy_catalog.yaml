@@ -80,3 +80,13 @@ policies:
       stop_radius_m: 1.0
     trigger: "Walking worker within proximity radius"
     action: "STOP if < 1m, SLOW if < 3m"
+
+  - policy_id: PATH_CLEARANCE_07
+    name: Path clearance
+    description: Deny a move whose straight path runs through permanent racking, so the robot replans along the aisles before it starts instead of being stopped when already close.
+    severity: HIGH
+    parameters:
+      robot_radius_m: 0.4
+      path_margin_m: 0.6
+    trigger: "Straight path to the target passes within 0.2 m of racking (robot body)"
+    action: REPLAN

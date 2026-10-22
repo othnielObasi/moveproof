@@ -40,7 +40,8 @@ NEAR_START_M = 6.0           # fallback radius when no goal is known
 MAX_LESSONS_IN_PROMPT = 5
 MAX_SPATIAL_LESSONS = 200
 
-HARD_POLICIES = {"GEOFENCE_01", "HUMAN_PROXIMITY_02", "WORKER_PROXIMITY_06", "OBSTACLE_CLEARANCE_03"}
+HARD_POLICIES = {"GEOFENCE_01", "HUMAN_PROXIMITY_02", "WORKER_PROXIMITY_06", "OBSTACLE_CLEARANCE_03",
+                 "PATH_CLEARANCE_07"}
 
 # Policies about where the robot is or how fast it moves there: an approved speed
 # in the same cell is real evidence of what the gate accepts at that spot.
@@ -58,6 +59,7 @@ POLICY_DESCRIPTIONS = {
     "UNCERTAINTY_04": "a person detected with low perception confidence",
     "HITL_05": "risk high enough to need operator review",
     "WORKER_PROXIMITY_06": "a walking worker inside the stop radius",
+    "PATH_CLEARANCE_07": "a straight path through racking",
 }
 
 ADVICE = {
@@ -68,6 +70,7 @@ ADVICE = {
     "OBSTACLE_CLEARANCE_03": "Obstacles often block this spot: route around it.",
     "GEOFENCE_01": "Keep waypoints well inside the boundary here.",
     "HITL_05": "Moves here often need operator review: choose a lower-risk route.",
+    "PATH_CLEARANCE_07": "Plans from here cut through racking: route via the aisles and cross-aisles.",
 }
 
 _DENIED = ("DENIED", "NEEDS_REVIEW")

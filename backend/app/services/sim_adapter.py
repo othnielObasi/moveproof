@@ -61,5 +61,17 @@ class SimAdapter:
         r.raise_for_status()
         return r.json()
 
+    async def get_frame(self, size: int = 512) -> bytes:
+        """Robot camera frame (PNG). Only the warehouse simulator provides it."""
+        r = await self._client.get(f"{self.base_url}/frame", params={"size": size})
+        r.raise_for_status()
+        return r.content
+
+    async def load_seed(self, seed: int, mode: str = "benchmark") -> Dict[str, Any]:
+        """Load a benchmark scenario (or another live site) by seed. Warehouse simulator only."""
+        r = await self._client.post(f"{self.base_url}/seed", json={"seed": seed, "mode": mode})
+        r.raise_for_status()
+        return r.json()
+
     async def close(self) -> None:
         await self._client.aclose()
