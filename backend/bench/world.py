@@ -291,10 +291,14 @@ class World:
 
     # -- actors ----------------------------------------------------------------
     def people(self) -> List[Walker]:
-        return [w for w in self.walkers if w.kind == "person" and self.t >= w.start_t and not w.done]
+        return [w for w in self.walkers if w.kind == "person" and self._present(w)]
 
     def vehicles(self) -> List[Walker]:
-        return [w for w in self.walkers if w.kind != "person" and self.t >= w.start_t and not w.done]
+        return [w for w in self.walkers if w.kind != "person" and self._present(w)]
+
+    def _present(self, w: Walker) -> bool:
+        # Not yet in the scene until it starts moving; gone once a one-way route is done
+        return not w.done and (self.t >= w.start_t or w.idx > 0)
 
     def obstacles(self) -> List[Circle]:
         vs = [Circle(v.pos[0], v.pos[1], v.radius, v.kind) for v in self.vehicles()]
@@ -350,6 +354,9 @@ class World:
     def step(self, dt: float) -> None:
         self.t += dt
         for w in self.walkers:
+            if (not w.done and w.idx == 0 and w.pos == w.route[0] and self.t >= w.start_t
+                    and math.hypot(w.pos[0] - self.robot.x, w.pos[1] - self.robot.y) < 3.0):
+                w.start_t = self.t + 1.0   # people and vehicles enter the scene out of reach, not on top of the robot
             w.step(self.t, dt, (self.robot.x, self.robot.y))
         for s in list(self.spawns):
             if self.t >= s.t:
