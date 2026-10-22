@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getRun, listEvents, stopRun, operatorOverride, getWorld, getTelemetry, getPathPreview, triggerScenario, generateLLMPlan, executeLLMPlan, analyzeScene, analyzeTelemetry, detectFailures, agenticPropose, getMission, getRiskHeatmap, getExecutedPath, getRunSafetyReport, getDivergenceExplanation, analyzeRunOptimization } from "@/lib/api";
 import { Map2D } from "@/components/Map2D";
+import { RobotCamera } from "@/components/RobotCamera";
 import { ScoreCard } from "@/components/ScoreCard";
 import { IntrospectionPanel } from "@/components/IntrospectionPanel";
 import { wsUrlForRun } from "@/lib/ws";
@@ -694,6 +695,8 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   { key: "human_approach", icon: "🚶", label: "Human Near", cls: "border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/20" },
                   { key: "human_too_close", icon: "🛑", label: "Too Close", cls: "border-red-500/40 text-red-400 hover:bg-red-500/20" },
                   { key: "path_blocked", icon: "🚧", label: "Blocked", cls: "border-blue-500/40 text-blue-400 hover:bg-blue-500/20" },
+                  { key: "spill", icon: "💧", label: "Spill", cls: "border-sky-500/40 text-sky-400 hover:bg-sky-500/20" },
+                  { key: "forklift_crossing", icon: "🚜", label: "Forklift", cls: "border-amber-500/40 text-amber-400 hover:bg-amber-500/20" },
                   { key: "clear", icon: "✅", label: "Clear", cls: "border-green-500/40 text-green-400 hover:bg-green-500/20" },
                 ] as const).map((s) => (
                   <button
@@ -710,6 +713,9 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             </div>
             <div className={isFullscreen ? "min-h-[60vh]" : "min-h-[350px]"}>
               <Map2D world={world} telemetry={telemetry} pathPoints={pathPoints} planWaypoints={llmPlan?.waypoints || null} missionGoal={resolveBayGoal(missionInstruction, world?.bays || []) || mission?.goal || null} showHeatmap={showHeatmap} showTrail={showTrail} safetyState={safety.state} hoveredWaypointIdx={hoveredWaypointIdx} riskCells={riskCells} executedPath={executedPathData} destinationBayId={destinationBayId} fullscreenTargetRef={fullscreenGridRef} />
+            </div>
+            <div className="mt-3 max-w-xs">
+              <RobotCamera active={currentStatus === "running" || currentStatus === "paused" || currentStatus === "planning"} />
             </div>
             {/* Map Legend — explicit path ownership */}
             <div className="flex items-center gap-3 mt-2 px-1 flex-wrap">

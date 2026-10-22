@@ -11,9 +11,9 @@
   "shard": "0/1",
   "policy_version": "aa01208d5790c6c5",
   "candidate_rules": false,
-  "generated_at": "2026-10-22 14:51 UTC",
-  "git_commit": "c9382a9",
-  "wall_time_s": 23.7,
+  "generated_at": "2026-10-22 14:58 UTC",
+  "git_commit": "0dc0051",
+  "wall_time_s": 25.0,
   "lessons_learned": 0
  },
  "rules": {

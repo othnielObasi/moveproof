@@ -686,6 +686,9 @@ export function Map2D({
       pallet:     { fill: "#b45309", border: "#92400e", label: "PALLET" },
       handcart:   { fill: "#6366f1", border: "#4338ca", label: "HANDCART" },
       tote_stack: { fill: "#0891b2", border: "#0e7490", label: "TOTES" },
+      dropped_pallet: { fill: "#b45309", border: "#f59e0b", label: "DROPPED PALLET" },
+      spill:      { fill: "#2563eb", border: "#60a5fa", label: "SPILL" },
+      forklift:   { fill: "#eab308", border: "#a16207", label: "FORKLIFT" },
     };
     for (const ob of obstacles) {
       const p = w2c({ x: +ob.x, y: +ob.y });
@@ -700,6 +703,45 @@ export function Map2D({
       ctx.beginPath();
       ctx.arc(p.x, p.y, r * 2.5, 0, Math.PI * 2);
       ctx.fill();
+
+      if (ob.type === "spill") {
+        /* puddle */
+        ctx.fillStyle = `${ot.fill}cc`;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, r * 1.3, r, 0.4, 0, Math.PI * 2);
+        ctx.ellipse(p.x + r * 0.6, p.y - r * 0.4, r * 0.7, r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.font = `bold ${Math.max(7, 8 * zoom)}px system-ui`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(ot.label, p.x, p.y - r * 1.4);
+        continue;
+      }
+      if (ob.type === "forklift") {
+        /* vehicle body + forks, rotated to its heading (world y is flipped on screen) */
+        const h = -(+(ob.heading ?? 0));
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(h);
+        ctx.fillStyle = ot.fill;
+        ctx.strokeStyle = ot.border;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(-r, -r * 0.6, r * 2, r * 1.2, 3);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#9ca3af";
+        ctx.fillRect(r, -r * 0.45, r * 0.7, r * 0.2);
+        ctx.fillRect(r, r * 0.25, r * 0.7, r * 0.2);
+        ctx.restore();
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.font = `bold ${Math.max(7, 8 * zoom)}px system-ui`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(ot.label, p.x, p.y - r - 3);
+        continue;
+      }
 
       /* box */
       const bs = r * 1.4;

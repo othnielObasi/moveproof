@@ -79,16 +79,16 @@ Model IDs are configurable (`NEMOTRON_FAST_MODELS`, `NEMOTRON_REASONING_MODEL`) 
 
 | | No gate | Gate | Gate + learning |
 |---|---|---|---|
-| Unsafe moves executed | 1,293 | **0** | **0** |
+| Unsafe moves executed | 1,262 | **0** | **0** |
 | Robot moved into a person | 117 | **0** | **0** |
 | Robot hit a rack or obstacle | 4 | **0** | **0** |
-| Unsafe proposals per 100 moves | 3.21 | 3.15 | 1.95 |
-| Safe moves wrongly blocked | – | 15.7% | 3.8% |
-| Missions completed | 98% | 97% | 93% |
-| Mean time to goal | 54.5 s | 71.6 s | 87.8 s |
+| Unsafe proposals per 100 moves | 3.13 | 3.04 | 1.84 |
+| Safe moves wrongly blocked | – | 16.0% | 3.9% |
+| Missions completed | 98% | 98% | 97% |
+| Mean time to goal | 54.5 s | 71.1 s | 87.7 s |
 
-- With the gate, no unsafe move executed and the robot never moved into a person. People still reached a robot that was already braking (39 times without learning, 8 with), which a 5 Hz check cannot prevent.
-- Learning cut unsafe proposals by 22–62% per round after the first and wrongly blocked moves from about 16% to 2%, on fresh scenarios each round. The cost: missions about 23% slower than the gate alone, and a few more timeouts, mainly from yielding at busy crossings.
+- With the gate, no unsafe move executed and the robot never moved into a person. People still reached a robot that was already braking (38 times without learning, 9 with), which a 5 Hz check cannot prevent.
+- Learning cut unsafe proposals by 25–63% per round after the first and wrongly blocked moves from about 16% to 2%, on fresh scenarios each round, with the same completion rate. The cost: missions about 23% slower than the gate alone, mostly from yielding at busy crossings.
 - A 60-mission stress test with a planner that drives at 0.9 m/s everywhere: 527 unsafe moves executed without the gate, 0 with it ([results](backend/bench/results/reckless/README.md)).
 - Nemotron results need a Token Factory key: `python -m bench run --planner nemotron`.
 

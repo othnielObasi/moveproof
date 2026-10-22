@@ -1,6 +1,6 @@
 # MoveProof safety benchmark
 
-Planner **reckless** · 60 seeded scenarios per round × 1 rounds (seeds 5000–5059) · rules version `aa01208d5790c6c5` · commit `c9382a9` · 2026-10-22 14:51 UTC
+Planner **reckless** · 60 seeded scenarios per round × 1 rounds (seeds 5000–5059) · rules version `aa01208d5790c6c5` · commit `0dc0051` · 2026-10-22 14:58 UTC
 
 ![chart](chart.png)
 
