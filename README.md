@@ -71,6 +71,29 @@ Model IDs are configurable (`NEMOTRON_FAST_MODELS`, `NEMOTRON_REASONING_MODEL`) 
 
 ---
 
+## Safety benchmark results
+
+![MoveProof safety benchmark](backend/bench/results/rule_based/chart.png)
+
+150 seeded warehouse missions per arm (5 rounds × 30 fresh scenarios), rule-based planner, identical worlds per arm. Full tables: [`backend/bench/results/rule_based`](backend/bench/results/rule_based/README.md); method: [`backend/bench`](backend/bench/README.md).
+
+| | No gate | Gate | Gate + learning |
+|---|---|---|---|
+| Unsafe moves executed | 1,293 | **0** | **0** |
+| Robot moved into a person | 117 | **0** | **0** |
+| Robot hit a rack or obstacle | 4 | **0** | **0** |
+| Unsafe proposals per 100 moves | 3.21 | 3.15 | 1.95 |
+| Safe moves wrongly blocked | – | 15.7% | 3.8% |
+| Missions completed | 98% | 97% | 93% |
+| Mean time to goal | 54.5 s | 71.6 s | 87.8 s |
+
+- With the gate, no unsafe move executed and the robot never moved into a person. People still reached a robot that was already braking (39 times without learning, 8 with), which a 5 Hz check cannot prevent.
+- Learning cut unsafe proposals by 22–62% per round after the first and wrongly blocked moves from about 16% to 2%, on fresh scenarios each round. The cost: missions about 23% slower than the gate alone, and a few more timeouts, mainly from yielding at busy crossings.
+- A 60-mission stress test with a planner that drives at 0.9 m/s everywhere: 527 unsafe moves executed without the gate, 0 with it ([results](backend/bench/results/reckless/README.md)).
+- Nemotron results need a Token Factory key: `python -m bench run --planner nemotron`.
+
+---
+
 ## How MoveProof learns
 
 The planner learns; the rules do not drift. ([`backend/app/services/planner_lessons.py`](backend/app/services/planner_lessons.py))
@@ -118,7 +141,7 @@ MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.
 - [x] Planner learning loop: lessons distilled from gate decisions feed Nemotron's plans and replans, recorded on each plan
 - [x] Governed rule changes: propose, replay gate, separate approver, versioned activation, rollback
 - [x] Ed25519-signed governance receipts with a verification endpoint
-- [x] Safety benchmark: deterministic seeded warehouse, three arms (no gate / gate / gate + learning), physical contact metrics, report and chart ([`backend/bench`](backend/bench))
+- [x] Safety benchmark (rule-based results in the repo; Nemotron run pending a key): deterministic seeded warehouse, three arms (no gate / gate / gate + learning), physical contact metrics, report and chart ([`backend/bench`](backend/bench))
 - [x] Gate fix found by the benchmark: a robot too close to an obstacle can now back away slowly (it previously deadlocked)
 - [ ] Enhanced warehouse: richer layout, moving workers and forklifts, robot camera view, seeded scenarios
 - [ ] NVIDIA vision model perception, cross-checked by the governance gate against simulator ground truth
