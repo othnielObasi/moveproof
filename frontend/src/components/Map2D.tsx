@@ -84,8 +84,8 @@ export function Map2D({
 
   const geo = world?.geofence ?? { min_x: 0, max_x: 40, min_y: 0, max_y: 25 };
   const zones: any[] = world?.zones ?? [];
-  const obstacles: any[] = world?.obstacles ?? [];
-  const human = world?.human ?? null;
+  const obstacles: any[] = telemetry?.obstacles ?? world?.obstacles ?? [];
+  const human = telemetry?.human ?? world?.human ?? null;
   const walkingHumans: any[] = telemetry?.walking_humans ?? world?.walking_humans ?? [];
   const idleRobots: any[] = telemetry?.idle_robots ?? world?.idle_robots ?? [];
   const bays: any[] = world?.bays ?? [];
@@ -280,16 +280,16 @@ export function Map2D({
         ctx.fillStyle = C.floorAisle;
         ctx.fillRect(tl.x, tl.y, zw, zh);
       }
+      /* zone name tucked into the zone's top-left corner, clear of robots and people */
       ctx.fillStyle = C.zoneLabel;
-      ctx.font = `bold ${Math.max(14, 18 * zoom)}px system-ui`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
+      ctx.font = `bold ${Math.max(10, 11 * zoom)}px system-ui`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
       const zoneText = z.name.toUpperCase().replace("_", " ");
-      /* text outline for readability */
       ctx.strokeStyle = "rgba(0,0,0,0.5)";
       ctx.lineWidth = 3;
-      ctx.strokeText(zoneText, tl.x + zw / 2, tl.y + zh / 2);
-      ctx.fillText(zoneText, tl.x + zw / 2, tl.y + zh / 2);
+      ctx.strokeText(zoneText, tl.x + 6, tl.y + 4);
+      ctx.fillText(zoneText, tl.x + 6, tl.y + 4);
     }
 
     /* ── warehouse bays (docks, picks, staging) ────────────── */
@@ -767,7 +767,7 @@ export function Map2D({
       ctx.font = `bold ${Math.max(7, 8 * zoom)}px system-ui`;
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      ctx.fillText(ot.label, p.x, p.y - bs - 3);
+      if (zoom >= 1.6 || ob.type === "dropped_pallet") ctx.fillText(ot.label, p.x, p.y - bs - 3); // parked clutter: label only when zoomed in
     }
 
     /* ── human ──────────────────────────────────────────────── */
@@ -827,7 +827,7 @@ export function Map2D({
       ctx.fillStyle = C.human;
       ctx.font = `bold ${Math.max(8, 9 * zoom)}px system-ui`;
       ctx.textAlign = "center";
-      ctx.fillText("HUMAN", p.x, p.y + 12 * zoom);
+      ctx.fillText("PERSON", p.x, p.y + 12 * zoom);
 
       /* distance from robot */
       if (telemetry) {
@@ -844,7 +844,10 @@ export function Map2D({
     /* ── walking humans (secondary workers) ──────────────────── */
     for (const wh of walkingHumans) {
       if (typeof wh.x !== "number") continue;
+      /* the primary human is drawn above with its safety rings; don't draw it twice */
+      if (human && Math.hypot(+wh.x - +human.x, +wh.y - +human.y) < 0.3) continue;
       const p = w2c({ x: +wh.x, y: +wh.y });
+      const nearRobot = telemetry && typeof telemetry.x === "number" && Math.hypot(+wh.x - +telemetry.x, +wh.y - +telemetry.y) < 1.5;
 
       /* soft proximity glow */
       const gr = 1.5 * baseScale * zoom;
@@ -896,11 +899,13 @@ export function Map2D({
       }
 
       /* name label */
-      const label = wh.label ?? "Worker";
+      const label = wh.label ?? wh.name ?? "Worker";
+      if (!nearRobot) {
       ctx.fillStyle = "rgba(251,191,36,0.8)";
       ctx.font = `${Math.max(7, 8 * zoom)}px system-ui`;
       ctx.textAlign = "center";
       ctx.fillText(label, p.x, p.y + 9 * zoom);
+      }
 
       /* distance from robot */
       if (telemetry && typeof telemetry.x === "number") {

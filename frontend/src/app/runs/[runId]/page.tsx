@@ -3,12 +3,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getRun, listEvents, stopRun, operatorOverride, getWorld, getTelemetry, getPathPreview, triggerScenario, generateLLMPlan, executeLLMPlan, analyzeScene, analyzeTelemetry, detectFailures, agenticPropose, getMission, getRiskHeatmap, getExecutedPath, getRunSafetyReport, getDivergenceExplanation, analyzeRunOptimization } from "@/lib/api";
 import { Map2D } from "@/components/Map2D";
-import { RobotCamera } from "@/components/RobotCamera";
+import dynamic from "next/dynamic";
 import { ScoreCard } from "@/components/ScoreCard";
 import { IntrospectionPanel } from "@/components/IntrospectionPanel";
 import { wsUrlForRun } from "@/lib/ws";
 import type { WsMessage } from "@/lib/types";
 import Link from "next/link";
+
+const Warehouse3D = dynamic(() => import("@/components/twin/Warehouse3D"), {
+  ssr: false,
+  loading: () => <div className="h-full min-h-[360px] flex items-center justify-center text-slate-400 text-sm">Loading the 3D warehouse…</div>,
+});
 
 /* ── Bay resolver (matches backend resolve_bay_from_instruction) ── */
 const BAY_PATTERN = /\b([ABSR])-?(\d{1,2})\b/i;
@@ -85,6 +90,10 @@ export default function RunPage({ params }: { params: { runId: string } }) {
   const [telemetry, setTelemetry] = useState<any>(null);
   const [world, setWorld] = useState<any>(null);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
+  const [mapView, setMapView] = useState<"3d" | "2d">("3d");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") === "2d") setMapView("2d");
+  }, []);
   const [showTrail, setShowTrail] = useState<boolean>(true);
   const [pathPoints, setPathPoints] = useState<Array<{x:number;y:number}> | null>(null);
   const [riskCells, setRiskCells] = useState<Array<{x:number;y:number;risk:number}>>([]);
@@ -711,12 +720,33 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 ))}
               </div>
             </div>
-            <div className={isFullscreen ? "min-h-[60vh]" : "min-h-[350px]"}>
-              <Map2D world={world} telemetry={telemetry} pathPoints={pathPoints} planWaypoints={llmPlan?.waypoints || null} missionGoal={resolveBayGoal(missionInstruction, world?.bays || []) || mission?.goal || null} showHeatmap={showHeatmap} showTrail={showTrail} safetyState={safety.state} hoveredWaypointIdx={hoveredWaypointIdx} riskCells={riskCells} executedPath={executedPathData} destinationBayId={destinationBayId} fullscreenTargetRef={fullscreenGridRef} />
+            <div className="flex items-center gap-1 mb-2">
+              {([["3d", "3D warehouse"], ["2d", "Floor plan"]] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setMapView(k)} className={`px-3 py-1 rounded-md text-xs font-semibold border transition ${mapView === k ? "bg-cyan-500 text-slate-950 border-cyan-400" : "border-slate-600 text-slate-300 hover:bg-slate-700/50"}`}>
+                  {label}
+                </button>
+              ))}
             </div>
-            <div className="mt-3 max-w-xs">
-              <RobotCamera active={currentStatus === "running" || currentStatus === "paused" || currentStatus === "planning"} />
-            </div>
+            {mapView === "3d" ? (
+              <div className={isFullscreen ? "h-[72vh]" : "h-[480px]"}>
+                <Warehouse3D
+                  world={world}
+                  telemetry={telemetry}
+                  verdict={lastDecision?.governance?.decision ?? null}
+                  verdictText={lastDecision?.governance?.reasons?.[0] ?? null}
+                  proposal={lastDecision?.proposal ?? null}
+                  planWaypoints={llmPlan?.waypoints || null}
+                  executedPath={executedPathData}
+                  goal={resolveBayGoal(missionInstruction, world?.bays || []) || mission?.goal || null}
+                  goalLabel={destinationBayId}
+                  className="h-full"
+                />
+              </div>
+            ) : (
+              <div className={isFullscreen ? "min-h-[60vh]" : "min-h-[350px]"}>
+                <Map2D world={world} telemetry={telemetry} pathPoints={pathPoints} planWaypoints={llmPlan?.waypoints || null} missionGoal={resolveBayGoal(missionInstruction, world?.bays || []) || mission?.goal || null} showHeatmap={showHeatmap} showTrail={showTrail} safetyState={safety.state} hoveredWaypointIdx={hoveredWaypointIdx} riskCells={riskCells} executedPath={executedPathData} destinationBayId={destinationBayId} fullscreenTargetRef={fullscreenGridRef} />
+              </div>
+            )}
             {/* Map Legend — explicit path ownership */}
             <div className="flex items-center gap-3 mt-2 px-1 flex-wrap">
               <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block" /> Robot</span>

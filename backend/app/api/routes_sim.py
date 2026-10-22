@@ -103,6 +103,14 @@ async def path_preview(run_id: str, db: Session = Depends(get_db)):
     telemetry = await sim.get_telemetry()
 
     world = await sim.get_world()
+    start = {"x": float(telemetry.get("x", 0)), "y": float(telemetry.get("y", 0))}
+    if world.get("racks"):
+        # Route along the aisles, the way the robot will actually drive
+        from app.services.site_router import route_plan
+        wps = route_plan(world, start, {"x": float(goal.get("x", 0)), "y": float(goal.get("y", 0))}, {})
+        if wps:
+            pts = [start] + [{"x": w["x"], "y": w["y"]} for w in wps]
+            return PathPreview(points=[Point(**p) for p in pts], note="Route along the aisles")
     points, note = plan_path(
         start={"x": float(telemetry.get("x", 0)), "y": float(telemetry.get("y", 0))},
         goal={"x": float(goal.get("x", 0)), "y": float(goal.get("y", 0))},
