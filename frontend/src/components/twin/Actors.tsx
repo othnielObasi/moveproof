@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { RoundedBox } from "@react-three/drei";
+import { Html, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import { labelTexture, loadTexture, rng, vestTexture, woodTexture } from "./textures";
 
@@ -21,7 +21,7 @@ export const VERDICT_COLOURS: Record<string, string> = {
 const tmp = new THREE.Vector3();
 
 /** Glide a group toward (x, y) and heading; returns the measured speed (m/s). */
-function useGlide(ref: React.RefObject<THREE.Group>, x: number, y: number, heading: number | null, rate = 6) {
+function useGlide(ref: React.RefObject<THREE.Group>, x: number, y: number, heading: number | null, rate = 6, pose?: React.MutableRefObject<{ x: number; y: number; theta: number }>) {
   const speed = useRef(0);
   const init = useRef(false);
   const lastHeading = useRef(heading ?? 0);
@@ -32,14 +32,18 @@ function useGlide(ref: React.RefObject<THREE.Group>, x: number, y: number, headi
     if (!init.current || g.position.distanceTo(tmp) > 6) {
       g.position.copy(tmp);
       g.rotation.y = heading ?? 0;
+      speed.current = 0;
+      lastHeading.current = heading ?? 0;
+      if (pose) { pose.current.x = g.position.x; pose.current.y = -g.position.z; pose.current.theta = g.rotation.y; }
       init.current = true;
       return;
     }
-    const before = g.position.clone();
+    const beforeX = g.position.x, beforeZ = g.position.z;
     const k = 1 - Math.exp(-rate * Math.min(dt, 0.1));
     g.position.lerp(tmp, k);
-    const moved = before.distanceTo(g.position);
-    speed.current = speed.current * 0.85 + (moved / Math.max(dt, 1e-3)) * 0.15;
+    const moved = Math.hypot(g.position.x - beforeX, g.position.z - beforeZ);
+    const speedEase = 1 - Math.exp(-10 * Math.min(dt, 0.1));
+    speed.current += (moved / Math.max(dt, 1e-3) - speed.current) * speedEase;
     let target = heading;
     if (target === null) {
       const dx = tmp.x - g.position.x, dz = tmp.z - g.position.z;
@@ -49,15 +53,17 @@ function useGlide(ref: React.RefObject<THREE.Group>, x: number, y: number, headi
     let d = target - g.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     g.rotation.y += d * Math.min(1, k * 1.5);
+    if (pose) { pose.current.x = g.position.x; pose.current.y = -g.position.z; pose.current.theta = g.rotation.y; }
   });
   return speed;
 }
 
 /* ────────────────────────────── robot ────────────────────────────── */
 
-export function Robot({ x, y, theta, verdict, ghost = false, idle = false }: { x: number; y: number; theta: number; verdict: string; ghost?: boolean; idle?: boolean }) {
+export function Robot({ x, y, theta, verdict, ghost = false, idle = false, pose, label }: { label?: string; pose?: React.MutableRefObject<{ x: number; y: number; theta: number }>; x: number; y: number; theta: number; verdict: string; ghost?: boolean; idle?: boolean }) {
   const ref = useRef<THREE.Group>(null!);
-  useGlide(ref, x, y, theta, ghost ? 30 : 7);
+  const speed = useGlide(ref, x, y, theta, ghost ? 30 : 7, pose);
+  const wheels = useRef<THREE.Group[]>([]);
   const colour = VERDICT_COLOURS[verdict] ?? VERDICT_COLOURS.IDLE;
   const mats = useMemo(() => {
     const decal = labelTexture("MOVEPROOF", { bg: "#e9edf1", fg: "#0f172a", w: 512, h: 96, font: "800 54px Arial" });
@@ -83,7 +89,8 @@ export function Robot({ x, y, theta, verdict, ghost = false, idle = false }: { x
   }, [colour, ghost, idle]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, dt) => {
+    for (const wheel of wheels.current) if (wheel) wheel.rotation.z -= speed.current * Math.min(dt, 0.1) / 0.095;
     const pulse = 0.55 + 0.45 * Math.sin(clock.elapsedTime * (verdict === "DENIED" ? 9 : 3));
     mats.fieldEdge.opacity = (ghost ? 0.4 : 0.9) * pulse;
     mats.strip.emissiveIntensity = 2.5 + 1.5 * pulse;
@@ -91,6 +98,13 @@ export function Robot({ x, y, theta, verdict, ghost = false, idle = false }: { x
 
   return (
     <group ref={ref}>
+      {label && <Html position={[0, 1.2, 0]} center distanceFactor={16}><div className="whitespace-nowrap rounded bg-slate-950/80 px-2 py-1 text-[10px] text-slate-300">{label} · IDLE</div></Html>}
+      {/* Four recessed rubber wheels roll with measured rendered travel. */}
+      {[[-0.28, -0.31], [-0.28, 0.31], [0.28, -0.31], [0.28, 0.31]].map(([wx, wz], i) => <group key={i} ref={(wheel) => { if (wheel) wheels.current[i] = wheel; }} position={[wx, 0.095, wz]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.095, 0.095, 0.065, 16]} /><meshStandardMaterial color="#161b22" roughness={0.94} /></mesh>
+        <mesh position={[0, 0, wz > 0 ? 0.036 : -0.036]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.047, 0.047, 0.006, 12]} /><meshStandardMaterial color="#9aa8b7" metalness={0.7} roughness={0.35} /></mesh>
+        <mesh position={[0.025, 0, wz > 0 ? 0.041 : -0.041]}><boxGeometry args={[0.008, 0.065, 0.004]} /><meshStandardMaterial color="#364152" /></mesh>
+      </group>)}
       {/* chassis: 0.9 m long, 0.62 m wide */}
       <RoundedBox args={[0.9, 0.24, 0.62]} radius={0.06} smoothness={4} position={[0, 0.17, 0]} castShadow material={mats.body} />
       <RoundedBox args={[0.84, 0.05, 0.58]} radius={0.03} smoothness={4} position={[0, 0.31, 0]} castShadow material={mats.top} />
@@ -237,15 +251,18 @@ export function Forklift({ x, y, heading }: { x: number; y: number; heading: num
 const SKIN = ["#e0b899", "#c68d67", "#8d5a3b", "#5c3a26", "#f1cfb4", "#a8714e"];
 
 /** A warehouse operative: proportioned limbs with knee and elbow bend, hi-vis vest, hard hat. */
-export function Worker({ x, y, id, highlight = false }: { x: number; y: number; id: string; highlight?: boolean }) {
+export function Worker({ x, y, id, highlight = false, label, heading }: { heading?: number; label?: string; x: number; y: number; id: string; highlight?: boolean }) {
   const ref = useRef<THREE.Group>(null!);
   const hipL = useRef<THREE.Group>(null!), hipR = useRef<THREE.Group>(null!);
   const kneeL = useRef<THREE.Group>(null!), kneeR = useRef<THREE.Group>(null!);
   const shL = useRef<THREE.Group>(null!), shR = useRef<THREE.Group>(null!);
   const elL = useRef<THREE.Group>(null!), elR = useRef<THREE.Group>(null!);
   const body = useRef<THREE.Group>(null!);
-  const speed = useGlide(ref, x, y, null, 4);
-  const phase = useRef(Math.random() * 6);
+  const head = useRef<THREE.Group>(null!);
+  const gait = useRef(0);
+  const faceDetails = useRef<THREE.Group>(null!);
+  const speed = useGlide(ref, x, y, heading ?? null, 4);
+  const phase = useRef(Array.from(id).reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % 6);
   const look = useMemo(() => {
     let h = 0;
     for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -259,6 +276,9 @@ export function Worker({ x, y, id, highlight = false }: { x: number; y: number; 
       scale: 0.95 + r() * 0.09,
       scanner: r() < 0.55,
       bald: r() < 0.3,
+      build: 0.94 + r() * 0.12,
+      hair: ["#211811", "#3b2b1d", "#72675d", "#161616"][Math.floor(r() * 4)],
+      beard: r() < 0.35,
     };
   }, [id]);
   const mats = useMemo(() => ({
@@ -268,17 +288,28 @@ export function Worker({ x, y, id, highlight = false }: { x: number; y: number; 
     trousers: new THREE.MeshStandardMaterial({ color: look.trousers, roughness: 0.9 }),
     boots: new THREE.MeshStandardMaterial({ color: "#17110d", roughness: 0.55 }),
     sole: new THREE.MeshStandardMaterial({ color: "#3a332c", roughness: 0.9 }),
-    hat: new THREE.MeshPhysicalMaterial({ color: look.hat, roughness: 0.25, clearcoat: 1 }),
+    hat: new THREE.MeshPhysicalMaterial({ color: look.hat, roughness: 0.42, clearcoat: 0.35 }),
     dark: new THREE.MeshStandardMaterial({ color: "#111", roughness: 0.35, metalness: 0.3 }),
     screen: new THREE.MeshStandardMaterial({ color: "#000", emissive: "#4ade80", emissiveIntensity: 1.2 }),
-    hair: new THREE.MeshStandardMaterial({ color: "#1d140e", roughness: 0.95 }),
+    hair: new THREE.MeshStandardMaterial({ color: look.hair, roughness: 0.95 }),
+    eye: new THREE.MeshStandardMaterial({ color: "#bcb8ad", roughness: 0.5 }),
+    iris: new THREE.MeshStandardMaterial({ color: "#29261e", roughness: 0.35 }),
+    lip: new THREE.MeshStandardMaterial({ color: new THREE.Color(look.skin).multiplyScalar(0.62), roughness: 0.85 }),
+    trim: new THREE.MeshStandardMaterial({ color: "#c7cdd0", metalness: 0.65, roughness: 0.32 }),
   }), [look]);
 
-  useFrame((_, dt) => {
+  useEffect(() => () => {
+    Object.values(mats).forEach(material => material.dispose());
+    look.vest.dispose();
+  }, [mats, look]);
+
+  useFrame(({ clock, camera }, dt) => {
+    if (faceDetails.current && ref.current) faceDetails.current.visible = camera.position.distanceToSquared(ref.current.position) < 144;
     const v = Math.min(speed.current, 1.8);
     const walking = v > 0.1;
-    phase.current += dt * (walking ? 3.0 + v * 3.4 : 0);
-    const amp = walking ? Math.min(0.5, 0.2 + v * 0.28) : 0;
+    phase.current += Math.min(dt, 0.1) * (walking ? 3.0 + v * 3.4 : 0);
+    gait.current += ((walking ? Math.min(0.5, 0.2 + v * 0.28) : 0) - gait.current) * (1 - Math.exp(-8 * Math.min(dt, 0.1)));
+    const amp = gait.current;
     const s = Math.sin(phase.current), c = Math.cos(phase.current);
     const k = Math.min(1, dt * 12);
     const ease = (r: React.RefObject<THREE.Group>, target: number) => {
@@ -287,13 +318,21 @@ export function Worker({ x, y, id, highlight = false }: { x: number; y: number; 
     // hips swing; knees bend on the trailing leg
     ease(hipL, s * amp);
     ease(hipR, -s * amp);
-    ease(kneeL, -Math.max(0, -c) * amp * 1.4);
-    ease(kneeR, -Math.max(0, c) * amp * 1.4);
+    ease(kneeL, -Math.max(0, s) * amp * 1.5);
+    ease(kneeR, -Math.max(0, -s) * amp * 1.5);
     ease(shL, -s * amp * 0.7);
     ease(shR, look.scanner ? 0.2 : s * amp * 0.7);
     ease(elL, 0.25 + amp * 0.3);
     ease(elR, look.scanner ? 1.25 : 0.25 + amp * 0.3);
-    if (body.current) body.current.position.y = walking ? Math.abs(c) * 0.025 : 0;
+    if (body.current) {
+      body.current.position.y = Math.abs(c) * amp * 0.035 + Math.sin(clock.elapsedTime * 1.8) * 0.003;
+      body.current.rotation.x = Math.sin(phase.current) * amp * 0.035;
+      body.current.rotation.y = Math.sin(phase.current) * amp * 0.055;
+    }
+    if (head.current) {
+      head.current.rotation.y = Math.sin(clock.elapsedTime * 0.5 + phase.current * 0.1) * 0.045;
+      head.current.rotation.z = Math.sin(clock.elapsedTime * 0.7) * 0.012;
+    }
   });
 
   const leg = (hip: React.RefObject<THREE.Group>, knee: React.RefObject<THREE.Group>, z: number) => (
@@ -320,14 +359,17 @@ export function Worker({ x, y, id, highlight = false }: { x: number; y: number; 
         <sphereGeometry args={[0.065, 12, 10]} />
       </mesh>
       <mesh position={[0, -0.15, 0]} castShadow material={mats.shirt}>
-        <cylinderGeometry args={[0.055, 0.047, 0.3, 10]} />
+        <capsuleGeometry args={[0.054, 0.19, 4, 10]} />
       </mesh>
       <group ref={el} position={[0, -0.3, 0]}>
         <mesh position={[0, -0.13, 0]} castShadow material={mats.shirt}>
-          <cylinderGeometry args={[0.046, 0.038, 0.27, 10]} />
+          <capsuleGeometry args={[0.043, 0.18, 4, 10]} />
         </mesh>
-        <mesh position={[0, -0.3, 0]} castShadow material={mats.skin}>
-          <boxGeometry args={[0.05, 0.1, 0.08]} />
+        <mesh position={[0.008, -0.3, 0]} scale={[0.65, 1.15, 0.8]} castShadow material={mats.skin}>
+          <sphereGeometry args={[0.048, 10, 8]} />
+        </mesh>
+        <mesh position={[0.03, -0.285, z > 0 ? -0.027 : 0.027]} rotation={[0, 0, 0.35]} material={mats.skin}>
+          <capsuleGeometry args={[0.012, 0.025, 3, 6]} />
         </mesh>
         {scanner && (
           <group position={[0.04, -0.33, 0]}>
@@ -345,7 +387,8 @@ export function Worker({ x, y, id, highlight = false }: { x: number; y: number; 
 
   return (
     <group ref={ref}>
-      <group ref={body} scale={look.scale}>
+      {label && <Html position={[0, 2.05, 0]} center distanceFactor={16}><div className="whitespace-nowrap rounded bg-slate-950/80 px-2 py-0.5 text-[10px] text-amber-200">{label}</div></Html>}
+      <group ref={body} scale={[look.scale, look.scale, look.scale * look.build]}>
         {leg(hipL, kneeL, 0.095)}
         {leg(hipR, kneeR, -0.095)}
         {/* pelvis, torso in a fitted vest, shoulders */}
@@ -360,16 +403,33 @@ export function Worker({ x, y, id, highlight = false }: { x: number; y: number; 
         </mesh>
         {arm(shL, elL, 0.235, false)}
         {arm(shR, elR, -0.235, look.scanner)}
-        {/* neck, head, hair, hard hat */}
+        {/* Reflective bands follow the front and back of the fitted vest. */}
+        {[-1, 1].map(side => <group key={`trim-${side}`}>
+          <mesh position={[side * 0.142, 1.14, 0]} material={mats.trim}><boxGeometry args={[0.008, 0.035, 0.3]} /></mesh>
+          {[-0.105, 0.105].map(z => <mesh key={z} position={[side * 0.14, 1.33, z]} material={mats.trim}><boxGeometry args={[0.008, 0.21, 0.027]} /></mesh>)}
+        </group>)}
+        <mesh position={[0.145, 1.29, 0]} material={mats.dark}><boxGeometry args={[0.008, 0.32, 0.009]} /></mesh>
+        <mesh position={[0.151, 1.35, -0.058]} material={mats.shirt}><boxGeometry args={[0.012, 0.075, 0.065]} /></mesh>
+        {/* Neck, articulated head and close-range facial detail. */}
         <mesh position={[0, 1.53, 0]} material={mats.skin}>
           <cylinderGeometry args={[0.048, 0.055, 0.09, 10]} />
         </mesh>
+        <group ref={head} position={[0, 1.55, 0]}><group position={[0, -1.55, 0]}>
         <mesh position={[0.01, 1.645, 0]} scale={[1, 1.12, 0.92]} castShadow material={mats.skin}>
           <sphereGeometry args={[0.098, 18, 14]} />
         </mesh>
-        <mesh position={[0.098, 1.635, 0]} material={mats.skin}>
-          <boxGeometry args={[0.02, 0.03, 0.025]} />
-        </mesh>
+        <group ref={faceDetails}>
+        <mesh position={[0.028, 1.585, 0]} scale={[1, 0.78, 0.92]} material={mats.skin}><sphereGeometry args={[0.07, 14, 10]} /></mesh>
+        <mesh position={[0.105, 1.636, 0]} scale={[1.15, 1.35, 0.75]} material={mats.skin}><sphereGeometry args={[0.017, 10, 8]} /></mesh>
+        {[-1, 1].map(side => <group key={`face-${side}`}>
+          <mesh position={[-0.004, 1.648, side * 0.091]} scale={[0.7, 1.35, 0.5]} material={mats.skin}><sphereGeometry args={[0.021, 10, 8]} /></mesh>
+          <mesh position={[0.096, 1.664, side * 0.037]} scale={[0.35, 0.55, 1]} material={mats.eye}><sphereGeometry args={[0.013, 10, 8]} /></mesh>
+          <mesh position={[0.101, 1.664, side * 0.037]} scale={[0.3, 0.95, 0.8]} material={mats.iris}><sphereGeometry args={[0.006, 8, 6]} /></mesh>
+          <mesh position={[0.094, 1.682, side * 0.037]} rotation={[side * 0.08, 0, 0]} material={mats.hair}><boxGeometry args={[0.006, 0.005, 0.025]} /></mesh>
+        </group>)}
+        <mesh position={[0.105, 1.608, 0]} material={mats.lip}><boxGeometry args={[0.006, 0.004, 0.035]} /></mesh>
+        {look.beard && <mesh position={[0.057, 1.58, 0]} scale={[0.65, 0.42, 0.85]} material={mats.hair}><sphereGeometry args={[0.066, 12, 8]} /></mesh>}
+        </group>
         {!look.bald && (
           <mesh position={[-0.012, 1.655, 0]} scale={[1, 1.1, 0.95]} material={mats.hair}>
             <sphereGeometry args={[0.1, 16, 12, Math.PI * 0.55, Math.PI * 0.9]} />
@@ -382,9 +442,11 @@ export function Worker({ x, y, id, highlight = false }: { x: number; y: number; 
           <mesh position={[0.03, 0.002, 0]} scale={[1.2, 1, 1]} material={mats.hat}>
             <cylinderGeometry args={[0.135, 0.138, 0.012, 24]} />
           </mesh>
-          <mesh position={[0, 0.055, 0]} scale={[1.05, 1, 0.25]} material={mats.hat}>
+          <mesh position={[0, 0.035, 0]} scale={[1.05, 0.5, 0.18]} material={mats.hat}>
             <sphereGeometry args={[0.11, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />
           </mesh>
+        </group>
+        </group>
         </group>
       </group>
       {highlight && (

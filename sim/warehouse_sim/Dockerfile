@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # The engine is shared with the safety benchmark
 COPY backend/bench/__init__.py backend/bench/world.py backend/bench/scenarios.py backend/bench/layout.json /app/bench/
-COPY sim/warehouse_sim/server.py sim/warehouse_sim/camera.py /app/
+COPY sim/warehouse_sim/server.py sim/warehouse_sim/camera.py sim/warehouse_sim/traffic.py /app/
 
 USER sim
 EXPOSE 8090

@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from bench.scenarios import HOTSPOTS, generate
 from bench.world import Circle, Layout, RobotState, Walker, World
+from traffic import ActorNavigation, FORKLIFT_RADIUS, TrafficWorld
 
 SIM_TICK_HZ = float(os.getenv("SIM_TICK_HZ", "10"))
 SIM_SPEED = float(os.getenv("SIM_SPEED", "1.0"))        # 2.0 = twice real time
@@ -53,7 +54,7 @@ def _require_token(request: Request) -> None:
 # World construction
 # ---------------------------------------------------------------------------
 
-def _crossing_loop(rng: random.Random, hotspot, name: str) -> Walker:
+def _crossing_loop(rng: random.Random, hotspot, name: str, nav: ActorNavigation):
     """Someone who keeps crossing at a hotspot: across, pause, back."""
     vertical = hotspot[1] in (13.5,) or rng.random() < 0.5
     reach = rng.uniform(2.5, 3.5)
@@ -62,23 +63,49 @@ def _crossing_loop(rng: random.Random, hotspot, name: str) -> Walker:
     else:
         a, b = (hotspot[0] - reach, hotspot[1]), (hotspot[0] + reach, hotspot[1])
     clamp = lambda p: (min(39.5, max(0.5, p[0])), min(24.5, max(0.5, p[1])))  # noqa: E731
-    return Walker(name, [clamp(a), clamp(b)], rng.uniform(0.8, 1.2), start_t=rng.uniform(0, 20),
-                  loop=True, pause_s=rng.uniform(4.0, 12.0))
+    start, end = nav.safe_point(clamp(a)), nav.safe_point(clamp(b))
+    route = nav.route(start, end) if start and end else None
+    if not route or len(route) < 2:
+        return None
+    worker = Walker(name, route, rng.uniform(0.8, 1.2), start_t=rng.uniform(0, 20),
+                    loop=True, pause_s=rng.uniform(4.0, 12.0))
+    worker.navigation_ready = True
+    worker.pause_activity = "waiting_at_crossing"
+    return worker
 
 
 def build_live_world(seed: int) -> World:
     rng = random.Random(seed)
-    walkers: List[Walker] = []
-    for k in range(3):
-        a, b = rng.sample(list(layout.bays.values()), 2)
-        route = layout.route((a["x"], a["y"]), (b["x"], b["y"])) or [(a["x"], a["y"]), (b["x"], b["y"])]
-        walkers.append(Walker(f"Worker {chr(65 + k)}", route, rng.uniform(0.6, 1.0), start_t=rng.uniform(0, 10),
-                              loop=True, pause_s=rng.uniform(2, 5)))
+    world = TrafficWorld(layout=layout, robot=RobotState(*PARKING), seed=seed)
+    nav = world.pedestrian_nav
+    pick_bays = [b for b in layout.bays.values() if b.get("type") == "pick" and math.hypot(b["x"] - PARKING[0], b["y"] - PARKING[1]) > 3]
+    stations = [f for f in layout.data.get("features", []) if f["type"] == "packing_station"]
+    for k, bay in enumerate(rng.sample(pick_bays, min(3, len(pick_bays)))):
+        station = stations[k % len(stations)] if stations else bay
+        start = nav.safe_point((bay["x"], bay["y"]))
+        goal = nav.safe_point((station["x"], station["y"] - 0.5))
+        route = nav.route(start, goal) if start and goal else None
+        if route and len(route) > 1:
+            worker = Walker(f"Worker {chr(65 + k)}", route, rng.uniform(0.6, 1.0), start_t=rng.uniform(0, 10),
+                            loop=True, pause_s=rng.uniform(5, 9))
+            worker.navigation_ready = True
+            worker.task_stops = [(start, bay["id"]), (goal, station.get("label", "Packing"))]
+            shelf = min(layout.racks, key=lambda rack: rack.distance(*start), default=None)
+            worker.work_faces = [(goal, (station["x"], station["y"] + 0.55))]
+            if shelf:
+                worker.work_faces.append((start, shelf.nearest_point(*start)))
+            world.walkers.append(worker)
     for k, hs in enumerate(rng.sample(HOTSPOTS, 3)):
-        walkers.append(_crossing_loop(rng, hs, f"Crosser {k + 1}"))
-    walkers.append(Walker("Forklift", [(2.0, 13.5), (38.0, 13.5)], 1.4, start_t=5.0, loop=True, pause_s=6.0,
-                          radius=1.0, kind="forklift"))
-    return World(layout=layout, robot=RobotState(*PARKING), walkers=walkers, seed=seed)
+        worker = _crossing_loop(rng, hs, f"Runner {k + 1}", nav)
+        if worker:
+            world.walkers.append(worker)
+    start, end = world.vehicle_nav.safe_point((2.0, 13.5)), world.vehicle_nav.safe_point((38.0, 13.5))
+    route = world.vehicle_nav.route(start, end) if start and end else None
+    if route and len(route) > 1:
+        vehicle = Walker("Forklift", route, 1.4, start_t=5.0, loop=True, pause_s=6.0, radius=FORKLIFT_RADIUS, kind="forklift")
+        vehicle.navigation_ready = True
+        world.walkers.append(vehicle)
+    return world
 
 
 def _world() -> World:
@@ -119,6 +146,12 @@ def _obstacles(w: World) -> List[Dict[str, Any]]:
 
 
 def _heading(v: Walker) -> float:
+    if getattr(v, "activity", "") == "working":
+        for stand, face in getattr(v, "work_faces", []):
+            if math.dist(v.pos, stand) < 0.6:
+                return math.atan2(face[1] - v.pos[1], face[0] - v.pos[0])
+    if hasattr(v, "heading"):
+        return v.heading
     if v.idx + 1 < len(v.route):
         tx, ty = v.route[v.idx + 1]
         return math.atan2(ty - v.pos[1], tx - v.pos[0])
@@ -127,7 +160,10 @@ def _heading(v: Walker) -> float:
 
 def _people(w: World) -> List[Dict[str, Any]]:
     return [{"x": round(p.pos[0], 2), "y": round(p.pos[1], 2), "name": p.name, "type": "worker",
-             "role": "worker", "conf": 0.9} for p in w.people()]
+             "role": "worker", "conf": 0.9, "speed": round(getattr(p, "actual_speed", 0.0), 3),
+             "heading": round(_heading(p), 3), "activity": getattr(p, "activity", "walking"),
+             "destination": min(getattr(p, "task_stops", [(p.route[-1], "Crossing destination")]),
+                                key=lambda stop: math.dist(stop[0], p.route[-1]))[1]} for p in w.people()]
 
 
 def _telemetry(w: World) -> Dict[str, Any]:
@@ -263,6 +299,7 @@ def inject_scenario(request: Request, body: ScenarioRequest):
         w = _world()
         s = body.scenario
         if s in ("human_approach", "human_too_close"):
+            w.walkers = [v for v in w.walkers if v.name != "Injected worker"]
             d = 2.5 if s == "human_approach" else 0.8
             tx, ty = _ahead(w, d)
             sx, sy = _ahead(w, d + 4.0)
@@ -287,8 +324,14 @@ def inject_scenario(request: Request, body: ScenarioRequest):
         elif s == "forklift_crossing":
             fl = next((v for v in w.walkers if v.kind == "forklift"), None)
             if fl:
-                fl.pos, fl.idx, fl.pause_until = (2.0, 13.5), 0, 0.0
-                fl.route = [(2.0, 13.5), (38.0, 13.5)]
+                if isinstance(w, TrafficWorld):
+                    start, end = w.vehicle_nav.safe_point((2.0, 13.5)), w.vehicle_nav.safe_point((38.0, 13.5))
+                    route = w.vehicle_nav.route(start, end) if start and end else None
+                    if route:
+                        fl.pos, fl.idx, fl.pause_until, fl.route = start, 0, 0.0, route
+                else:
+                    fl.pos, fl.idx, fl.pause_until = (2.0, 13.5), 0, 0.0
+                    fl.route = [(2.0, 13.5), (38.0, 13.5)]
         elif s == "clear":
             w.active_spawns.clear()
             w.walkers = [v for v in w.walkers if v.name != "Injected worker"]

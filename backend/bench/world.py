@@ -360,11 +360,18 @@ class World:
 
     def step(self, dt: float) -> None:
         self.t += dt
+        self._step_actors(dt)
+        self._step_physics(dt)
+
+    def _step_actors(self, dt: float) -> None:
+        """Benchmark actor motion; the live simulator overrides this traffic hook."""
         for w in self.walkers:
             if (not w.done and w.idx == 0 and w.pos == w.route[0] and self.t >= w.start_t
                     and math.hypot(w.pos[0] - self.robot.x, w.pos[1] - self.robot.y) < 3.0):
                 w.start_t = self.t + 1.0   # people and vehicles enter the scene out of reach, not on top of the robot
             w.step(self.t, dt, (self.robot.x, self.robot.y))
+
+    def _step_physics(self, dt: float) -> None:
         for s in list(self.spawns):
             if self.t >= s.t:
                 if math.hypot(s.obstacle.x - self.robot.x, s.obstacle.y - self.robot.y) < 3.0:

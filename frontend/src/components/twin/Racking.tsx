@@ -4,7 +4,7 @@
  * with bracing, orange step beams, wire decking, end guards, location labels and
  * loaded pallets at mixed heights. Everything is instanced (a few draw calls).
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { labelTexture, loadTexture, meshTexture, rng, uprightTexture, woodTexture, type Rack } from "./textures";
@@ -47,16 +47,20 @@ function palletGeometry() {
   for (const x of [-0.55, 0, 0.55]) for (const z of [-0.43, 0, 0.43]) add(0.1, 0.078, 0.14, x, 0.083, z);
   for (const z of [-0.43, 0, 0.43]) add(PALLET_W, 0.022, 0.14, 0, 0.033, z);
   for (const x of [-0.55, 0, 0.55]) add(0.1, 0.022, 1.0, x, 0.011, 0);
-  return mergeGeometries(parts)!;
+  const merged = mergeGeometries(parts)!;
+  parts.forEach((part) => part.dispose());
+  return merged;
 }
 
 export function Racking({ racks }: { racks: Rack[] }) {
   const objects = useMemo(() => {
     const r = rng(42);
-    const uprights: Inst[] = [], braces: Inst[] = [], beams: Inst[] = [], decks: Inst[] = [], guards: Inst[] = [], labels: Inst[] = [], pallets: Inst[] = [], baseplates: Inst[] = [];
+    const uprights: Inst[] = [], braces: Inst[] = [], beams: Inst[] = [], decks: Inst[] = [], guards: Inst[] = [], pallets: Inst[] = [], baseplates: Inst[] = [];
+    const labelGroups: { id: string; items: Inst[] }[] = [];
     const loads: Inst[][] = [[], [], [], []];
 
     for (const rk of racks) {
+      const labels: Inst[] = [];
       const depth = rk.depth ?? 1;
       const L = rk.x2 - rk.x1;
       const nb = Math.max(1, Math.round(L / BAY_TARGET));
@@ -109,6 +113,7 @@ export function Racking({ racks }: { racks: Rack[] }) {
           }
         }
       }
+      labelGroups.push({ id: rk.id, items: labels });
       // end-of-run guards
       for (const x of [rk.x1 - 0.12, rk.x2 + 0.12]) guards.push({ p: [x, 0.2, zc], s: [0.1, 0.4, depth + 0.3] });
     }
@@ -116,7 +121,6 @@ export function Racking({ racks }: { racks: Rack[] }) {
     const box = new THREE.BoxGeometry(1, 1, 1);
     const upTex = uprightTexture();
     const meshTex = meshTexture();
-    const label = labelTexture("A-04-12", { bg: "#ffffff", fg: "#111", w: 256, h: 96, font: "700 44px Arial" });
 
     const out: THREE.Object3D[] = [
       instanced(new THREE.BoxGeometry(0.08, UPRIGHT_H, 0.08), new THREE.MeshStandardMaterial({ map: upTex, color: "#ffffff", roughness: 0.45, metalness: 0.5 }), uprights),
@@ -125,7 +129,7 @@ export function Racking({ racks }: { racks: Rack[] }) {
       instanced(new THREE.BoxGeometry(1, 0.02, 1), new THREE.MeshStandardMaterial({ map: meshTex, color: "#b9bec4", alphaTest: 0.4, transparent: false, metalness: 0.6, roughness: 0.4, side: THREE.DoubleSide }), decks, false),
       instanced(box, new THREE.MeshStandardMaterial({ color: "#f2b600", roughness: 0.5, metalness: 0.3 }), guards),
       instanced(box, new THREE.MeshStandardMaterial({ color: "#5a5f66", roughness: 0.6, metalness: 0.5 }), baseplates, false),
-      instanced(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: label, roughness: 0.6 }), labels, false),
+      ...labelGroups.map(({ id, items }) => instanced(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: labelTexture(id, { bg: "#ffffff", fg: "#111", w: 256, h: 96, font: "700 44px Arial" }), roughness: 0.6 }), items, false)),
       instanced(palletGeometry(), new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.85 }), pallets),
     ];
     loads.forEach((items, v) => {
@@ -137,6 +141,24 @@ export function Racking({ racks }: { racks: Rack[] }) {
     });
     return out;
   }, [racks]);
+
+  useEffect(() => () => {
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    const textures = new Set<THREE.Texture>();
+    for (const object of objects) {
+      const mesh = object as THREE.InstancedMesh;
+      geometries.add(mesh.geometry);
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        materials.add(material);
+        for (const value of Object.values(material)) if (value instanceof THREE.Texture) textures.add(value);
+      }
+      mesh.dispose();
+    }
+    textures.forEach((texture) => texture.dispose());
+    materials.forEach((material) => material.dispose());
+    geometries.forEach((geometry) => geometry.dispose());
+  }, [objects]);
 
   return (
     <group>

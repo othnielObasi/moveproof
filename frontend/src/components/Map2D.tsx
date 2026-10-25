@@ -59,6 +59,7 @@ export function Map2D({
   executedPath = [],
   destinationBayId = null,
   fullscreenTargetRef,
+  trailPoints,
 }: {
   world: any | null;
   telemetry: any | null;
@@ -73,6 +74,7 @@ export function Map2D({
   executedPath?: Array<Pt>;
   destinationBayId?: string | null;
   fullscreenTargetRef?: React.RefObject<HTMLElement | null>;
+  trailPoints?: Pt[];
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -80,7 +82,7 @@ export function Map2D({
   const [size, setSize] = useState({ w: 600, h: 380 });
   const W = size.w;
   const H = size.h;
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(() => typeof document !== "undefined" && !!document.fullscreenElement);
 
   const geo = world?.geofence ?? { min_x: 0, max_x: 40, min_y: 0, max_y: 25 };
   const zones: any[] = world?.zones ?? [];
@@ -579,7 +581,7 @@ export function Map2D({
 
     /* ── trail ──────────────────────────────────────────────── */
     if (showTrail) {
-      const tr = trailRef.current;
+      const tr = trailPoints ?? trailRef.current;
       if (tr.length >= 2) {
         for (let i = 1; i < tr.length; i++) {
           const a = 0.08 + (i / tr.length) * 0.4;
@@ -1332,7 +1334,7 @@ export function Map2D({
       ctx.textBaseline = "top";
       ctx.fillText(it.label, lx + 12, y);
     });
-  }, [world, telemetry, pathPoints, planWaypoints, baseScale, zoom, pan, showHeatmap, showTrail, safetyState, tick, pad, zones, obstacles, human, walkingHumans, idleRobots, bays, geo, W, H, riskCells, executedPath, destinationBayId]);
+  }, [world, telemetry, pathPoints, planWaypoints, baseScale, zoom, pan, showHeatmap, showTrail, safetyState, tick, pad, zones, obstacles, human, walkingHumans, idleRobots, bays, geo, W, H, riskCells, executedPath, destinationBayId, hoveredWaypointIdx, trailPoints]);
 
   /* ── Minimap (when zoomed > 1.5x) ─────────────────────────── */
   useEffect(() => {

@@ -2,19 +2,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getRun, listEvents, stopRun, operatorOverride, getWorld, getTelemetry, getPathPreview, triggerScenario, generateLLMPlan, executeLLMPlan, analyzeScene, analyzeTelemetry, detectFailures, agenticPropose, getMission, getRiskHeatmap, getExecutedPath, getRunSafetyReport, getDivergenceExplanation, analyzeRunOptimization } from "@/lib/api";
-import { Map2D } from "@/components/Map2D";
-import dynamic from "next/dynamic";
+import { WarehouseView } from "@/components/WarehouseView";
 import { ScoreCard } from "@/components/ScoreCard";
 import { SiteIntelPanel } from "@/components/SiteIntelPanel";
 import { IntrospectionPanel } from "@/components/IntrospectionPanel";
 import { wsUrlForRun } from "@/lib/ws";
 import type { WsMessage } from "@/lib/types";
 import Link from "next/link";
-
-const Warehouse3D = dynamic(() => import("@/components/twin/Warehouse3D"), {
-  ssr: false,
-  loading: () => <div className="h-full min-h-[360px] flex items-center justify-center text-slate-400 text-sm">Loading the 3D warehouse…</div>,
-});
 
 /* ── Bay resolver (matches backend resolve_bay_from_instruction) ── */
 const BAY_PATTERN = /\b([ABSR])-?(\d{1,2})\b/i;
@@ -728,26 +722,16 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 </button>
               ))}
             </div>
-            {mapView === "3d" ? (
-              <div className={isFullscreen ? "h-[72vh]" : "h-[480px]"}>
-                <Warehouse3D
-                  world={world}
-                  telemetry={telemetry}
-                  verdict={lastDecision?.governance?.decision ?? null}
-                  verdictText={lastDecision?.governance?.reasons?.[0] ?? null}
-                  proposal={lastDecision?.proposal ?? null}
-                  planWaypoints={llmPlan?.waypoints || null}
-                  executedPath={executedPathData}
-                  goal={resolveBayGoal(missionInstruction, world?.bays || []) || mission?.goal || null}
-                  goalLabel={destinationBayId}
-                  className="h-full"
-                />
-              </div>
-            ) : (
-              <div className={isFullscreen ? "min-h-[60vh]" : "min-h-[350px]"}>
-                <Map2D world={world} telemetry={telemetry} pathPoints={pathPoints} planWaypoints={llmPlan?.waypoints || null} missionGoal={resolveBayGoal(missionInstruction, world?.bays || []) || mission?.goal || null} showHeatmap={showHeatmap} showTrail={showTrail} safetyState={safety.state} hoveredWaypointIdx={hoveredWaypointIdx} riskCells={riskCells} executedPath={executedPathData} destinationBayId={destinationBayId} fullscreenTargetRef={fullscreenGridRef} />
-              </div>
-            )}
+            <div className={isFullscreen ? "h-[72vh]" : "h-[480px]"}>
+              <WarehouseView view={mapView} trailKey={runId} world={world} telemetry={telemetry}
+                pathPoints={pathPoints} planWaypoints={llmPlan?.waypoints || null}
+                missionGoal={resolveBayGoal(missionInstruction, world?.bays || []) || mission?.goal || null}
+                showHeatmap={showHeatmap} showTrail={showTrail} safetyState={safety.state}
+                hoveredWaypointIdx={hoveredWaypointIdx} riskCells={riskCells} executedPath={executedPathData}
+                destinationBayId={destinationBayId} fullscreenTargetRef={fullscreenGridRef}
+                verdict={lastDecision?.governance?.decision ?? null}
+                verdictText={lastDecision?.governance?.reasons?.[0] ?? null} proposal={lastDecision?.proposal ?? null} />
+            </div>
             {/* Map Legend — explicit path ownership */}
             <div className="flex items-center gap-3 mt-2 px-1 flex-wrap">
               <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block" /> Robot</span>

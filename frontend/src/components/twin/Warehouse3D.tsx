@@ -4,21 +4,36 @@
  * simulator's world and telemetry, with the governance layer drawn into the
  * scene (planned route, people's safety zones, denied moves, the verdict).
  */
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Html, Line, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Bloom, EffectComposer, N8AO, SMAA, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
+import { RiskHeatmap, RobotSafety, Trail, CameraFootprint, MiniMap } from "./MapLayers";
+import { FrameBudget } from "./FrameBudget";
 import { Building } from "./Building";
 import { Racking } from "./Racking";
 import { Features, Forklift, Obstacle, Robot, VERDICT_COLOURS, Worker, ZoneCones, ZoneMarking } from "./Actors";
 import type { WorldLayout } from "./textures";
+
+const StaticBuilding = memo(Building);
+const StaticRacking = memo(Racking);
+const StaticFeatures = memo(Features);
 
 export type CameraMode = "overview" | "follow" | "robot";
 type Pt = { x: number; y: number };
 export type Detection = { label: string; conf: number; dist: number; box: [number, number, number, number]; kind: string };
 
 export type TwinProps = {
+  pathPoints?: Pt[] | null;
+  showHeatmap?: boolean;
+  showTrail?: boolean;
+  trailPoints?: Pt[];
+  safetyState?: string;
+  hoveredWaypointIdx?: number | null;
+  riskCells?: Array<Pt & { risk: number }>;
+  destinationBayId?: string | null;
+  fullscreenTargetRef?: React.RefObject<HTMLElement | null>;
   world: any | null;
   telemetry: any | null;
   verdict?: string | null; // APPROVED | NEEDS_REVIEW | DENIED
@@ -33,26 +48,31 @@ export type TwinProps = {
   overlay?: boolean;
   className?: string;
   quality?: "high" | "low";
+  pickingGoal?: boolean;
+  onGoalPick?: (point: Pt) => void;
 };
 
 /* ───────────────────────── camera rigs ───────────────────────── */
 
-function CameraRig({ mode, robot, center }: { mode: CameraMode; robot: React.MutableRefObject<{ x: number; y: number; theta: number }>; center: THREE.Vector3 }) {
+function CameraRig({ mode, robot, center, reset, span, focus }: { span: number; focus: Pt | null; reset: number; mode: CameraMode; robot: React.MutableRefObject<{ x: number; y: number; theta: number }>; center: THREE.Vector3 }) {
   const { camera } = useThree();
   const look = useRef(new THREE.Vector3().copy(center));
   const pos = useRef(new THREE.Vector3());
+  const lookTarget = useRef(new THREE.Vector3());
   const snap = useRef(true);
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
     cam.fov = mode === "robot" ? 78 : mode === "follow" ? 55 : 42;
     cam.near = mode === "robot" ? 0.05 : 0.1;
+    cam.far = Math.max(200, span * 5);
     cam.updateProjectionMatrix();
     snap.current = true;
     if (mode === "overview") {
-      cam.position.set(center.x + 9, 31, center.z + 24);
-      cam.lookAt(center);
+      const target = focus ? lookTarget.current.set(focus.x, 0, -focus.y) : center;
+      cam.position.set(target.x + span * 0.225, span * 0.78, target.z + span * 0.6);
+      cam.lookAt(target);
     }
-  }, [mode, camera, center]);
+  }, [mode, camera, center, reset, span, focus]);
   useFrame((_, dt) => {
     if (mode === "overview") return;
     const r = robot.current;
@@ -60,7 +80,7 @@ function CameraRig({ mode, robot, center }: { mode: CameraMode; robot: React.Mut
     const k = 1 - Math.exp(-(mode === "robot" ? 14 : 3.5) * Math.min(dt, 0.1));
     if (mode === "follow") {
       pos.current.set(r.x - fx * 4.2, 3.1, -r.y - fz * 4.2);
-      look.current.lerp(new THREE.Vector3(r.x + fx * 3, 0.5, -r.y + fz * 3), snap.current ? 1 : k);
+      look.current.lerp(lookTarget.current.set(r.x + fx * 3, 0.5, -r.y + fz * 3), snap.current ? 1 : k);
     } else {
       pos.current.set(r.x + fx * 0.37, 0.76, -r.y + fz * 0.37);
       look.current.set(r.x + fx * 6, 0.45, -r.y + fz * 6);
@@ -126,24 +146,24 @@ function DetectionProbe({ active, items, onDetections, racks }: { racks: { x1: n
 
 /* ───────────────────────── governance overlay ───────────────────────── */
 
-function SafetyZones({ people, robot }: { people: Pt[]; robot: Pt }) {
+function SafetyZones({ people, robot, stop, slow }: { people: Pt[]; robot: Pt; stop: number; slow: number }) {
   return (
     <group>
       {people.map((p, i) => {
         const d = Math.hypot(p.x - robot.x, p.y - robot.y);
-        if (d > 9) return null;
+        if (d > Math.max(9, slow + 1)) return null;
         return (
           <group key={i} position={[p.x, 0.018, -p.y]} rotation={[-Math.PI / 2, 0, 0]}>
             <mesh>
-              <circleGeometry args={[1.0, 48]} />
-              <meshBasicMaterial color="#ef4444" transparent opacity={d < 1.5 ? 0.32 : 0.16} depthWrite={false} toneMapped={false} />
+              <circleGeometry args={[stop, 48]} />
+              <meshBasicMaterial color="#ef4444" transparent opacity={d < stop ? 0.32 : 0.16} depthWrite={false} toneMapped={false} />
             </mesh>
             <mesh>
-              <ringGeometry args={[2.94, 3.0, 64]} />
+              <ringGeometry args={[slow - 0.06, slow, 64]} />
               <meshBasicMaterial color="#f59e0b" transparent opacity={0.7} depthWrite={false} toneMapped={false} />
             </mesh>
             <mesh>
-              <ringGeometry args={[0.97, 1.03, 48]} />
+              <ringGeometry args={[stop - 0.03, stop + 0.03, 48]} />
               <meshBasicMaterial color="#ef4444" transparent opacity={0.9} depthWrite={false} toneMapped={false} />
             </mesh>
           </group>
@@ -183,22 +203,25 @@ function GoalMarker({ goal, label }: { goal: Pt; label?: string | null }) {
 
 /* ───────────────────────────── scene ───────────────────────────── */
 
-function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detection[]) => void; robotPose: React.MutableRefObject<{ x: number; y: number; theta: number }> }) {
+type Selection = { kind: "robot" | "person" | "obstacle"; index: number };
+
+function Scene(props: TwinProps & { focus: Pt | null; onCameraFootprint: (points: Pt[]) => void; reset: number; stop: number | null; slow: number | null; onSelect: (s: Selection) => void; mode: CameraMode; onDetections: (d: Detection[]) => void; robotPose: React.MutableRefObject<{ x: number; y: number; theta: number }> }) {
   const { world, telemetry, verdict, verdictText, proposal, planWaypoints, executedPath, goal, goalLabel, mode, overlay = true, quality = "high" } = props;
+  const [waypoint, setWaypoint] = useState<number | null>(null);
   const layout: WorldLayout = world;
   const g = layout.geofence;
+  const span = Math.max(g.max_x - g.min_x, g.max_y - g.min_y);
   const center = useMemo(() => new THREE.Vector3((g.min_x + g.max_x) / 2, 0, -(g.min_y + g.max_y) / 2), [g]);
 
   const rx = telemetry?.x ?? 3, ry = telemetry?.y ?? 3.5, rth = telemetry?.theta ?? 0;
-  props.robotPose.current = { x: rx, y: ry, theta: rth };
   const obstacles: any[] = telemetry?.obstacles ?? world?.obstacles ?? [];
   const peopleRaw: any[] = telemetry?.walking_humans ?? world?.walking_humans ?? [];
   const people = useMemo(() => {
     const out = [...peopleRaw];
-    const h = telemetry?.human;
+    const h = telemetry?.human ?? world?.human;
     if (h && !out.some((p) => Math.hypot(p.x - h.x, p.y - h.y) < 0.2)) out.push({ ...h, name: h.name ?? "Worker" });
     return out;
-  }, [peopleRaw, telemetry?.human]);
+  }, [peopleRaw, telemetry?.human, world?.human]);
   const idle: any[] = telemetry?.idle_robots ?? world?.idle_robots ?? [];
   const forklifts = obstacles.filter((o) => o.type === "forklift");
   const zones: any[] = telemetry?.site_constraints ?? [];
@@ -208,6 +231,7 @@ function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detectio
   const v = holding ? "HOLDING" : verdict ?? "IDLE";
 
   const ghostTarget = proposal?.intent === "MOVE_TO" && v !== "APPROVED" && proposal?.params && typeof proposal.params.x === "number" ? { x: proposal.params.x, y: proposal.params.y } : null;
+  const destination = layout.bays.find(b => b.id === props.destinationBayId);
   const nearestPerson = people.reduce((m: number, p: any) => Math.min(m, Math.hypot(p.x - rx, p.y - ry)), 999);
 
   const detItems = useMemo(() => [
@@ -220,15 +244,16 @@ function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detectio
 
   return (
     <>
-      <color attach="background" args={["#c9ced4"]} />
-      <fog attach="fog" args={["#c4c9cf", 26, 85]} />
-      <hemisphereLight args={["#ffffff", "#8b8a86", 0.55]} />
+      <color attach="background" args={["#b9c6d3"]} />
+      <fog attach="fog" args={["#becbd6", span * 0.95, span * 2.5]} />
+      <hemisphereLight args={["#ffffff", "#8b8a86", mode === "robot" ? 0.8 : 0.55]} />
+      <directionalLight position={[center.x - 15, 18, center.z - 12]} intensity={0.35} color="#d9eaff" />
       <directionalLight
         position={[center.x + 6, 30, center.z + 8]}
         intensity={1.5}
         color="#fff6e8"
-        castShadow
-        shadow-mapSize={[quality === "high" ? 4096 : 2048, quality === "high" ? 4096 : 2048]}
+        castShadow={quality === "high"}
+        shadow-mapSize={[quality === "high" ? 2048 : 1024, quality === "high" ? 2048 : 1024]}
         shadow-camera-left={-26}
         shadow-camera-right={26}
         shadow-camera-top={18}
@@ -243,37 +268,55 @@ function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detectio
         <WarehouseEnvironment />
       </Suspense>
 
-      <Building world={layout} />
-      <Racking racks={layout.racks} />
-      <Features features={layout.features ?? []} />
+      <StaticBuilding world={layout} />
+      {props.pickingGoal && mode === "overview" && <mesh position={[center.x, 0.045, center.z]} rotation={[-Math.PI / 2, 0, 0]} onClick={(e) => {
+        if (e.delta > 5) return;
+        e.stopPropagation();
+        props.onGoalPick?.({ x: Math.round(e.point.x * 100) / 100, y: Math.round(-e.point.z * 100) / 100 });
+      }}><planeGeometry args={[g.max_x - g.min_x, g.max_y - g.min_y]} /><meshBasicMaterial color="#38bdf8" transparent opacity={0.07} depthWrite={false} /></mesh>}
+      <StaticRacking racks={layout.racks} />
+      <StaticFeatures features={layout.features ?? []} />
 
       {statics.map((o, i) => (
-        <Obstacle key={`${o.type}-${i}-${o.x}-${o.y}`} o={o} />
+        <group key={`${o.type}-${i}`} onClick={(e) => { e.stopPropagation(); props.onSelect({ kind: "obstacle", index: obstacles.indexOf(o) }); }}><Obstacle o={o} /></group>
       ))}
       {zones.map((z: any) => (
         <ZoneCones key={`cones-${z.id}-${z.radius}`} zone={z} racks={layout.racks} bounds={g} />
       ))}
       {forklifts.map((f, i) => (
-        <Forklift key={`fl-${i}`} x={f.x} y={f.y} heading={f.heading ?? 0} />
+        <group key={`fl-${i}`} onClick={(e) => { e.stopPropagation(); props.onSelect({ kind: "obstacle", index: obstacles.indexOf(f) }); }}><Forklift x={f.x} y={f.y} heading={f.heading ?? 0} /></group>
       ))}
       {people.map((p: any, i: number) => (
-        <Worker key={p.name ?? i} id={p.name ?? String(i)} x={p.x} y={p.y} highlight={overlay && Math.hypot(p.x - rx, p.y - ry) < 3} />
+        <group key={p.name ?? i} onClick={(e) => { e.stopPropagation(); props.onSelect({ kind: "person", index: i }); }}><Worker heading={p.heading} label={mode !== "robot" ? p.name ?? p.label ?? `Worker ${i + 1}` : undefined} id={p.name ?? String(i)} x={p.x} y={p.y} highlight={overlay && props.slow !== null && Math.hypot(p.x - rx, p.y - ry) < props.slow} /></group>
       ))}
       {idle.map((r: any, i: number) => (
-        <Robot key={`idle-${i}`} x={r.x} y={r.y} theta={r.theta ?? 0} verdict="IDLE" idle />
+        <Robot key={`idle-${i}`} x={r.x} y={r.y} theta={r.theta ?? 0} verdict="IDLE" idle label={mode !== "robot" ? r.label ?? `Robot ${i + 2}` : undefined} />
       ))}
-      <Robot x={rx} y={ry} theta={rth} verdict={v} />
+      <group onClick={(e) => { e.stopPropagation(); props.onSelect({ kind: "robot", index: 0 }); }}><Robot x={rx} y={ry} theta={rth} verdict={v} pose={props.robotPose} /></group>
 
       {overlay && (
         <group>
+          {props.showHeatmap && <RiskHeatmap bounds={g} human={telemetry?.human ?? world?.human ?? null} obstacles={obstacles} riskCells={props.riskCells ?? []} />}
+          {props.showTrail && <Trail points={props.trailPoints ?? []} />}
+          <RobotSafety robot={{ x: rx, y: ry }} state={props.safetyState ?? "OK"} />
+          {props.pathPoints && props.pathPoints.length > 1 && <Line points={props.pathPoints.map(p => [p.x, 0.028, -p.y])} color="#3b82f6" lineWidth={2.5} dashed dashSize={0.4} gapSize={0.2} />}
+          <Line points={[[g.min_x, 0.015, -g.min_y], [g.max_x, 0.015, -g.min_y], [g.max_x, 0.015, -g.max_y], [g.min_x, 0.015, -g.max_y], [g.min_x, 0.015, -g.min_y]]} color="#64748b" lineWidth={2} />
           {planWaypoints && planWaypoints.length > 0 && (
-            <Line points={[[rx, 0.03, -ry], ...planWaypoints.map((w) => [w.x, 0.03, -w.y] as [number, number, number])]} color="#22d3ee" lineWidth={3.5} dashed dashSize={0.5} gapSize={0.3} transparent opacity={0.95} />
+            <Line points={[[rx, 0.03, -ry], ...planWaypoints.map((w) => [w.x, 0.03, -w.y] as [number, number, number])]} color="#a855f7" lineWidth={3.5} dashed dashSize={0.5} gapSize={0.3} transparent opacity={0.95} />
           )}
+          {planWaypoints?.map((w, i) => <group key={i} position={[w.x, 0.12, -w.y]}>
+            <mesh onClick={(e) => { e.stopPropagation(); setWaypoint(waypoint === i ? null : i); }}>
+              <sphereGeometry args={[waypoint === i || props.hoveredWaypointIdx === i ? 0.22 : 0.13, 10, 8]} />
+              <meshBasicMaterial color={waypoint === i || props.hoveredWaypointIdx === i ? "#ffffff" : "#a855f7"} toneMapped={false} />
+            </mesh>
+            {(waypoint === i || props.hoveredWaypointIdx === i) && <Html position={[0, 0.65, 0]} center zIndexRange={[20, 0]}><div className="whitespace-nowrap rounded bg-slate-950/95 border border-cyan-600 p-2 text-xs text-white">Waypoint {i + 1} · {w.x.toFixed(1)}, {w.y.toFixed(1)} m<br />Speed cap: {w.max_speed?.toFixed(2) ?? "unspecified"} m/s</div></Html>}
+          </group>)}
           {executedPath && executedPath.length > 1 && (
             <Line points={executedPath.map((p) => [p.x, 0.025, -p.y] as [number, number, number])} color="#22c55e" lineWidth={2.5} transparent opacity={0.6} />
           )}
           {goal && <GoalMarker goal={goal} label={goalLabel} />}
-          <SafetyZones people={people} robot={{ x: rx, y: ry }} />
+          {destination && (!goal || Math.hypot(goal.x - destination.x, goal.y - destination.y) > 0.01) && <GoalMarker goal={destination} label={`DEST ${destination.id}`} />}
+          {props.stop !== null && props.slow !== null && <SafetyZones people={people} robot={{ x: rx, y: ry }} stop={props.stop} slow={props.slow} />}
           {zones.map((z: any) => (
             <group key={`zm-${z.id}`}>
               <ZoneMarking zone={z} />
@@ -294,7 +337,7 @@ function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detectio
             <Html position={[rx, 1.55, -ry]} center zIndexRange={[20, 0]}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, pointerEvents: "none" }}>
                 <div style={{ background: VERDICT_COLOURS[v] ?? "#38bdf8", color: "#0b0b0b", font: "800 12px system-ui", padding: "3px 9px", borderRadius: 6, whiteSpace: "nowrap", boxShadow: "0 2px 10px rgba(0,0,0,.35)" }}>
-                  {v === "IDLE" ? "STANDBY" : v.replace("_", " ")}
+                  {props.safetyState ?? (v === "IDLE" ? "STANDBY" : v.replace("_", " "))} · {Number(telemetry?.speed ?? 0).toFixed(2)} m/s
                   {nearestPerson < 6 ? ` · person ${nearestPerson.toFixed(1)} m` : ""}
                 </div>
                 {verdictText && v !== "APPROVED" && v !== "IDLE" && (
@@ -306,16 +349,17 @@ function Scene(props: TwinProps & { mode: CameraMode; onDetections: (d: Detectio
         </group>
       )}
 
-      <CameraRig mode={mode} robot={props.robotPose} center={center} />
+      <CameraRig mode={mode} robot={props.robotPose} center={center} reset={props.reset} span={span} focus={props.focus} />
+      <CameraFootprint onChange={props.onCameraFootprint} />
       <DetectionProbe active={mode === "robot"} items={detItems} onDetections={props.onDetections} racks={layout.racks} />
-      {mode === "overview" && <OrbitControls target={center} maxPolarAngle={Math.PI / 2.15} minDistance={4} maxDistance={70} enableDamping />}
+      {mode === "overview" && <OrbitControls key={props.reset} target={props.focus ? [props.focus.x, 0, -props.focus.y] : center} maxPolarAngle={Math.PI / 2.15} minDistance={4} maxDistance={span * 2} enableDamping />}
 
       {quality === "high" ? (
         <EffectComposer multisampling={0} enableNormalPass={false}>
           <N8AO aoRadius={1.2} intensity={2.2} distanceFalloff={0.6} quality="medium" halfRes />
           <Bloom mipmapBlur luminanceThreshold={1.0} intensity={0.55} radius={0.6} />
-          <SMAA />
-          <Vignette offset={0.25} darkness={0.55} />
+            <SMAA />
+          <Vignette offset={0.25} darkness={mode === "robot" ? 0.2 : 0.4} />
         </EffectComposer>
       ) : null}
     </>
@@ -343,6 +387,51 @@ const MODES: { key: CameraMode; label: string }[] = [
   { key: "robot", label: "Robot eye" },
 ];
 
+class RenderBoundary extends Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    return this.state.failed ? <div role="alert" className="p-8 text-slate-200">3D rendering is unavailable. Try reloading or use the dashboard’s 2D map. <button className="underline" onClick={() => window.location.reload()}>Reload</button></div> : this.props.children;
+  }
+}
+
+function ContextMonitor({ onLost }: { onLost: (lost: boolean) => void }) {
+  const { gl } = useThree();
+  useEffect(() => {
+    const lost = (e: Event) => { e.preventDefault(); onLost(true); };
+    const restored = () => onLost(false);
+    gl.domElement.addEventListener("webglcontextlost", lost);
+    gl.domElement.addEventListener("webglcontextrestored", restored);
+    return () => {
+      gl.domElement.removeEventListener("webglcontextlost", lost);
+      gl.domElement.removeEventListener("webglcontextrestored", restored);
+    };
+  }, [gl, onLost]);
+  return null;
+}
+
+/** Lighting is fixed: reuse the shadow map between actor updates instead of
+ * rendering the entire warehouse a second time on every display frame. */
+function ShadowBudget({ enabled }: { enabled: boolean }) {
+  const { gl } = useThree();
+  const elapsed = useRef(0);
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = enabled;
+    elapsed.current = 1;
+    return () => { gl.shadowMap.autoUpdate = true; };
+  }, [gl, enabled]);
+  useFrame((_, dt) => {
+    if (!enabled || document.hidden) return;
+    elapsed.current += dt;
+    if (elapsed.current >= 1 / 15) {
+      gl.shadowMap.needsUpdate = true;
+      elapsed.current = 0;
+    }
+  });
+  return null;
+}
+
 const DET_COLOURS: Record<string, string> = { person: "#f97316", forklift: "#facc15", spill: "#38bdf8", dropped_pallet: "#f43f5e" };
 
 export default function Warehouse3D(props: TwinProps) {
@@ -350,14 +439,97 @@ export default function Warehouse3D(props: TwinProps) {
     const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("cam") : null;
     return props.mode ?? (q === "follow" || q === "robot" ? q : "overview");
   });
-  const mode = props.mode ?? modeLocal;
+  const normalizedWorld = useMemo(() => props.world ? { ...props.world, racks: props.world.racks ?? [], features: props.world.features ?? [], bays: props.world.bays ?? [], zones: props.world.zones ?? [] } : null, [props.world]);
+  const mode = props.pickingGoal ? "overview" : props.mode ?? modeLocal;
   const setMode = (m: CameraMode) => (props.onModeChange ? props.onModeChange(m) : setModeLocal(m));
   const [overlay, setOverlay] = useState(props.overlay ?? true);
   const [dets, setDets] = useState<Detection[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(() => typeof document !== "undefined" && !!document.fullscreenElement);
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null);
+  const [showMap, setShowMap] = useState(true);
+  const [cameraFootprint, setCameraFootprint] = useState<Pt[]>([]);
+  const [focus, setFocus] = useState<Pt | null>(null);
+  const [heatmapLocal, setHeatmapLocal] = useState(true);
+  const [trailLocal, setTrailLocal] = useState(true);
+  const heatmap = props.showHeatmap ?? heatmapLocal;
+  const trail = props.showTrail ?? trailLocal;
+  const liveTrail = useRef<Pt[]>([]);
+  useEffect(() => {
+    const t = props.telemetry;
+    if (!Number.isFinite(t?.x) || !Number.isFinite(t?.y)) return;
+    const last = liveTrail.current[liveTrail.current.length - 1];
+    if (!last || Math.hypot(t.x - last.x, t.y - last.y) > 0.05) {
+      liveTrail.current.push({ x: t.x, y: t.y });
+      if (liveTrail.current.length > 1200) liveTrail.current.shift();
+    }
+  }, [props.telemetry]);
+  useEffect(() => {
+    const update = () => {
+      const target = props.fullscreenTargetRef?.current ?? containerRef.current;
+      setFullscreen(!!target && document.fullscreenElement === target);
+    };
+    document.addEventListener("fullscreenchange", update);
+    return () => document.removeEventListener("fullscreenchange", update);
+  }, [props.fullscreenTargetRef]);
+  const toggleFullscreen = async () => {
+    try {
+      setFullscreenError(null);
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await (props.fullscreenTargetRef?.current ?? containerRef.current)?.requestFullscreen();
+    } catch { setFullscreenError("Fullscreen is unavailable in this browser."); }
+  };
+  const resolvedGoal = props.goal ?? props.planWaypoints?.[props.planWaypoints.length - 1] ?? props.telemetry?.target ?? null;
   const robotPose = useRef({ x: 3, y: 3.5, theta: 0 });
-  const v = props.verdict ?? "IDLE";
+  const v = props.verdict === "APPROVED" && props.proposal?.intent === "WAIT" ? "HOLDING" : props.verdict ?? "IDLE";
+  const [qualityChoice, setQualityChoice] = useState<"auto" | "high" | "low">(() => props.quality ?? (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("q") === "low" ? "low" : "auto"));
+  // Start with the inexpensive profile so first load is responsive on integrated GPUs.
+  // High remains an explicit choice; Auto never enables costly effects before measuring.
+  const [autoLow, setAutoLow] = useState(true);
+  const [fps, setFps] = useState<number | null>(null);
+  const [showRoutes, setShowRoutes] = useState(true);
+  const quality = qualityChoice === "auto" ? (autoLow ? "low" : "high") : qualityChoice;
+  const onFrameSample = useCallback((value: number) => { setFps(value); if (value < 35) setAutoLow(true); }, []);
+  useEffect(() => { if (props.pickingGoal) setMode("overview"); }, [props.pickingGoal]);
+  const [reset, setReset] = useState(0);
+  const [contextLost, setContextLost] = useState(false);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const [policy, setPolicy] = useState<{ stop: number; slow: number } | null>(null);
+  useEffect(() => { if (props.telemetry) setLastUpdate(Date.now()); }, [props.telemetry]);
+  useEffect(() => { if (props.quality) setQualityChoice(props.quality); }, [props.quality]);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  useEffect(() => {
+    let live = true;
+    const controller = new AbortController();
+    const refresh = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || "/api"}/policies/active`, { cache: "no-store", signal: controller.signal });
+        if (!res.ok) throw new Error("Policy unavailable");
+        const { parameters: p } = await res.json();
+        const stop = p.HUMAN_STOP_RADIUS_M, slow = p.HUMAN_SLOW_RADIUS_M;
+        if (!Number.isFinite(stop) || !Number.isFinite(slow) || stop <= 0 || slow <= stop) throw new Error("Invalid policy");
+        if (live) setPolicy({ stop, slow });
+      } catch { if (live) setPolicy(null); }
+    };
+    void refresh();
+    const id = window.setInterval(refresh, 5000);
+    return () => { live = false; controller.abort(); window.clearInterval(id); };
+  }, []);
+  const age = lastUpdate === null ? null : Math.max(0, Math.floor((now - lastUpdate) / 1000));
+  const people = [...(props.telemetry?.walking_humans ?? props.world?.walking_humans ?? [])];
+  const human = props.telemetry?.human ?? props.world?.human;
+  if (human && !people.some((p: Pt) => Math.hypot(p.x - human.x, p.y - human.y) < 0.2)) people.push(human);
+  const obstacles = props.telemetry?.obstacles ?? props.world?.obstacles ?? [];
+  const selected = selection?.kind === "robot" ? props.telemetry : selection?.kind === "person" ? people[selection.index] : selection ? obstacles[selection.index] : null;
+  const distance = selected && props.telemetry ? Math.hypot(selected.x - props.telemetry.x, selected.y - props.telemetry.y) : null;
+  const nearestClearance = props.telemetry ? Math.min(...people.map((p: Pt) => Math.hypot(p.x - props.telemetry.x, p.y - props.telemetry.y)), ...obstacles.map((o: any) => Math.max(0, Math.hypot(o.x - props.telemetry.x, o.y - props.telemetry.y) - (o.r ?? 0)))) : Infinity;
 
-  if (!props.world?.racks) {
+  if (!props.world?.geofence) {
     return (
       <div className={`flex items-center justify-center bg-slate-900 text-slate-400 text-sm ${props.className ?? ""}`} style={{ minHeight: 360 }}>
         Waiting for the warehouse simulator…
@@ -366,26 +538,51 @@ export default function Warehouse3D(props: TwinProps) {
   }
 
   return (
-    <div className={`relative overflow-hidden rounded-xl bg-slate-900 ${props.className ?? ""}`} style={{ minHeight: 360 }}>
-      <Canvas shadows dpr={props.quality === "low" ? 1 : [1, 2]} gl={{ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" }} onCreated={({ gl }) => {
+    <div ref={containerRef} className={`relative overflow-hidden rounded-xl bg-slate-900 ${props.className ?? ""}`} style={{ minHeight: 240, ...(fullscreen ? { height: "100vh" } : {}) }}>
+      <RenderBoundary><Canvas fallback={<div className="p-8 text-slate-200">WebGL is unavailable. Use the dashboard’s 2D map.</div>} shadows={quality === "high"} dpr={quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: true, powerPreference: "high-performance" }} onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.05;
         gl.shadowMap.type = THREE.PCFSoftShadowMap;
       }}>
         <PerspectiveCamera makeDefault position={[29, 31, 11.5]} fov={42} near={0.1} far={200} />
-        <Scene {...props} mode={mode} overlay={overlay} onDetections={setDets} robotPose={robotPose} />
-      </Canvas>
+        <ContextMonitor onLost={setContextLost} />
+        <ShadowBudget enabled={quality === "high"} />
+        <FrameBudget onSample={onFrameSample} />
+        <Scene {...props} world={normalizedWorld} goal={resolvedGoal} goalLabel={props.destinationBayId ?? props.goalLabel} showHeatmap={heatmap} showTrail={trail} trailPoints={props.trailPoints ?? liveTrail.current} focus={focus} onCameraFootprint={setCameraFootprint} pathPoints={showRoutes ? props.pathPoints : null} planWaypoints={showRoutes ? props.planWaypoints : null} executedPath={showRoutes ? props.executedPath : undefined} quality={quality} reset={reset} stop={policy?.stop ?? null} slow={policy?.slow ?? null} onSelect={setSelection} mode={mode} overlay={overlay} onDetections={setDets} robotPose={robotPose} />
+      </Canvas></RenderBoundary>
+      {contextLost && <div role="alert" className="absolute inset-0 z-30 grid place-items-center bg-slate-950/95 text-white">Graphics connection lost. <button className="underline" onClick={() => window.location.reload()}>Reload 3D view</button></div>}
 
       {/* controls */}
-      <div className="absolute top-3 left-3 flex gap-1 bg-slate-950/70 backdrop-blur rounded-lg p-1 border border-white/10">
+      <button aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"} title={fullscreen ? "Exit fullscreen" : "Fullscreen"} aria-pressed={fullscreen} className="absolute top-2 right-2 z-20 rounded-md bg-slate-800/90 px-2 py-1 text-xs text-slate-100 hover:bg-slate-700" onClick={toggleFullscreen}>{fullscreen ? "⛶ Exit" : "⛶ Fullscreen"}</button>
+      <div className="absolute top-3 left-3 right-32 flex w-fit max-w-[calc(100%-9rem)] flex-wrap gap-1 bg-slate-950/70 backdrop-blur rounded-lg p-1 border border-white/10">
         {MODES.map((m) => (
-          <button key={m.key} onClick={() => setMode(m.key)} className={`px-2.5 py-1 rounded-md text-xs font-semibold transition ${mode === m.key ? "bg-cyan-500 text-slate-950" : "text-slate-200 hover:bg-white/10"}`}>
+          <button aria-pressed={mode === m.key} key={m.key} onClick={() => setMode(m.key)} className={`px-2.5 py-1 rounded-md text-xs font-semibold transition ${mode === m.key ? "bg-cyan-500 text-slate-950" : "text-slate-200 hover:bg-white/10"}`}>
             {m.label}
           </button>
         ))}
       </div>
-      <button onClick={() => setOverlay(!overlay)} className="absolute top-3 right-3 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-950/70 backdrop-blur border border-white/10 text-slate-200 hover:bg-slate-800">
-        {overlay ? "Governance layer: on" : "Governance layer: off"}
+      <div className="absolute top-14 left-3 right-3 flex flex-wrap gap-2 text-xs text-slate-100">
+        <span role="status" className={`rounded px-2 py-1 ${age !== null && age < 3 ? "bg-emerald-950/90" : "bg-amber-950/90"}`}>{age === null ? "Waiting for telemetry" : age < 3 ? "Live · updated just now" : `Reconnecting · last update ${age}s ago`}</span>
+        <button className="rounded bg-slate-950/80 px-2 py-1" onClick={() => { setFocus(null); setReset((n) => n + 1); }}>Reset camera</button>
+        <label className="rounded bg-slate-950/80 px-2 py-1">Quality <select aria-label="Rendering quality" className="bg-slate-900" value={qualityChoice} onChange={(e) => { setQualityChoice(e.target.value as "auto" | "high" | "low"); setAutoLow(true); }}><option value="auto">Auto</option><option value="high">High</option><option value="low">Low</option></select></label>
+        <button aria-pressed={showMap} className="rounded bg-slate-950/80 px-2 py-1" onClick={() => setShowMap(!showMap)}>Minimap</button>
+        {props.showHeatmap === undefined && <button aria-pressed={heatmap} className="rounded bg-slate-950/80 px-2 py-1" onClick={() => setHeatmapLocal(!heatmap)}>Heatmap</button>}
+        {props.showTrail === undefined && <button aria-pressed={trail} className="rounded bg-slate-950/80 px-2 py-1" onClick={() => setTrailLocal(!trail)}>Trail</button>}
+        <span className="rounded bg-slate-950/80 px-2 py-1 text-slate-300">{fps === null ? "Measuring FPS" : `${fps} FPS`} · {quality}</span>
+        {props.planWaypoints?.length ? <button aria-pressed={showRoutes} className="rounded bg-slate-950/80 px-2 py-1" onClick={() => setShowRoutes(!showRoutes)}>{showRoutes ? "Hide route" : "Show route"} · {props.planWaypoints.length} waypoints</button> : null}
+        <button className="rounded bg-slate-950/80 px-2 py-1" onClick={() => setSelection({ kind: "robot", index: 0 })}>Inspect robot</button>
+      </div>
+      {fullscreenError && <p role="alert" className="absolute bottom-36 left-3 rounded bg-red-950/90 p-2 text-xs text-red-200">{fullscreenError}</p>}
+      {showMap && <MiniMap world={{ ...props.world, racks: props.world.racks ?? [] }} telemetry={props.telemetry} points={cameraFootprint} onNavigate={(point) => { setMode("overview"); setFocus(point); setReset(n => n + 1); }} />}
+      <output aria-label="Warehouse map status" className="sr-only">Execution {props.safetyState ?? "OK"}. Heatmap {heatmap ? "on" : "off"}. Trail {trail ? "on" : "off"}. Proposed path {props.pathPoints?.length ?? 0} points. Approved plan {props.planWaypoints?.length ?? 0} waypoints. Executed path {props.executedPath?.length ?? 0} points. Risk cells {props.riskCells?.length ?? 0}. Trail samples {(props.trailPoints ?? liveTrail.current).length}.</output>
+      {selection && <div className="absolute right-3 top-36 sm:top-28 z-20 max-w-[240px] rounded-lg border border-white/20 bg-slate-950/95 p-3 text-xs text-slate-200" aria-live="polite">
+        <button aria-label="Close inspection" className="float-right ml-4" onClick={() => setSelection(null)}>×</button>
+        <strong>{selection.kind === "robot" ? "Active robot" : selected?.name ?? selected?.type?.replaceAll("_", " ") ?? "Worker"}</strong>
+        {selected ? <><p className="mt-2">Position: {Number(selected.x).toFixed(2)}, {Number(selected.y).toFixed(2)} m</p><p>Speed: {Number.isFinite(selected.speed) ? `${selected.speed.toFixed(2)} m/s` : "Unavailable"}</p>{selection.kind === "robot" ? <><p>Nearest person / obstacle edge: {Number.isFinite(nearestClearance) ? `${nearestClearance.toFixed(2)} m` : "None reported"}</p><p>Gate: {v}</p><p>{props.verdictText ?? props.proposal?.rationale ?? "No decision reported"}</p></> : <><p>Distance to robot: {distance?.toFixed(2) ?? "—"} m</p>{selected.activity && <p>Activity: {selected.activity.replaceAll("_", " ")}</p>}{selected.destination && <p>Destination: {selected.destination}</p>}</>}{age !== null && age >= 3 && <p className="text-amber-300">Stale telemetry</p>}</> : <p className="mt-2">Object no longer reported.</p>}
+      </div>}
+      {mode !== "robot" && <div className="absolute bottom-3 left-3 right-3 rounded bg-slate-950/85 p-2 text-[11px] text-slate-200 pointer-events-none">{overlay ? <><span className="text-red-300">Stop {policy ? `${policy.stop} m` : "unavailable"}</span> · <span className="text-amber-300">Slow {policy ? `${policy.slow} m` : "unavailable"}</span> · <span className="text-blue-300">Proposed path</span> · <span className="text-purple-300">Approved plan</span> · <span className="text-green-300">Executed route / goal</span></> : "Governance layer hidden"}<span className="block text-slate-400">{props.world.geofence.max_x - props.world.geofence.min_x}×{props.world.geofence.max_y - props.world.geofence.min_y} m · {props.pickingGoal ? "Click open floor to choose a destination" : mode === "overview" ? "Drag to orbit · scroll to zoom · click actors or route points to inspect" : "Click an actor to inspect · Overview enables orbit controls"}</span></div>}
+      <button aria-pressed={overlay} onClick={() => setOverlay(!overlay)} className="absolute top-3 right-3 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-950/70 backdrop-blur border border-white/10 text-slate-200 hover:bg-slate-800">
+        {overlay ? "Governance: on" : "Governance: off"}
       </button>
 
       {/* robot-eye heads-up display */}
@@ -394,18 +591,18 @@ export default function Warehouse3D(props: TwinProps) {
           {dets.map((d, i) => (
             <div key={i} className="absolute" style={{ left: d.box[0], top: d.box[1], width: d.box[2] - d.box[0], height: Math.max(8, d.box[3] - d.box[1]), border: `2px solid ${DET_COLOURS[d.kind] ?? "#a3e635"}`, borderRadius: 3 }}>
               <span className="absolute -top-5 left-0 text-[10px] font-bold px-1.5 py-0.5 rounded-sm text-slate-950 whitespace-nowrap" style={{ background: DET_COLOURS[d.kind] ?? "#a3e635" }}>
-                {d.label} {d.conf.toFixed(2)} · {d.dist.toFixed(1)} m
+                {d.label} · {d.dist.toFixed(1)} m
               </span>
             </div>
           ))}
           <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
             <div className="text-[10px] font-mono text-white/80 bg-black/50 px-2 py-1 rounded">CAM-FRONT · 78° · {props.telemetry?.speed?.toFixed?.(2) ?? "0.00"} m/s</div>
             <div className="text-xs font-extrabold px-3 py-1 rounded" style={{ background: VERDICT_COLOURS[v] ?? "#38bdf8", color: "#0b0b0b" }}>
-              GATE: {v === "IDLE" ? "STANDBY" : v.replace("_", " ")}
+              GATE: {v === "IDLE" ? "STANDBY" : v.replace("_", " ")} · {props.safetyState ?? "OK"}
             </div>
           </div>
-          <div className="absolute top-12 left-3 text-[10px] font-mono text-red-400 flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> REC
+          <div className="absolute bottom-12 left-3 text-[10px] font-mono text-cyan-200 bg-slate-950/80 rounded px-2 py-1 flex items-center gap-1">
+            Simulated detections · projected from world state
           </div>
         </div>
       )}

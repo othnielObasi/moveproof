@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { Map2D } from '@/components/Map2D'
+import { WarehouseView } from '@/components/WarehouseView'
 
 // Simulated API responses (same format the Nemotron planner sends)
 const generateApiResponse = (scenario, robotPos, waypointIndex) => ({
@@ -21,6 +21,10 @@ const scenarios = [
 ]
 
 export default function MoveProofDashboard() {
+  const [mapView, setMapView] = useState<'2d' | '3d'>('3d')
+  const [showHeatmap, setShowHeatmap] = useState(true)
+  const [showTrail, setShowTrail] = useState(true)
+  const [hoveredWaypoint, setHoveredWaypoint] = useState<number | null>(null)
   const [wsConnected, setWsConnected] = useState(false)
   const [wsConnecting, setWsConnecting] = useState(true)
   const [messagesPerSec, setMessagesPerSec] = useState(0)
@@ -132,7 +136,7 @@ export default function MoveProofDashboard() {
       <div className="max-w-7xl mx-auto grid grid-cols-12 gap-4">
         <div className="col-span-8 bg-slate-800 rounded-md p-4">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold">Demo — Map2D (shared with Live)</h2>
+            <h2 className="text-lg font-semibold">Demo — shared warehouse view</h2>
             <div className="space-x-2">
               {scenarios.map((s, i) => (
                 <button key={s.name} onClick={() => handleScenarioChange(i)} className={`px-3 py-1 rounded ${i === activeScenario ? 'bg-emerald-500 text-black' : 'bg-slate-700'}`}>
@@ -142,8 +146,17 @@ export default function MoveProofDashboard() {
             </div>
           </div>
 
+          <div className="mb-3 flex flex-wrap gap-3 text-xs">
+            {(['3d', '2d'] as const).map(view => <button key={view} aria-pressed={mapView === view} onClick={() => setMapView(view)} className={`rounded px-3 py-1 ${mapView === view ? 'bg-cyan-400 text-slate-950' : 'bg-slate-700'}`}>{view === '3d' ? '3D warehouse' : 'Floor plan'}</button>)}
+            <label><input type="checkbox" checked={showHeatmap} onChange={e => setShowHeatmap(e.target.checked)} /> Heatmap</label>
+            <label><input type="checkbox" checked={showTrail} onChange={e => setShowTrail(e.target.checked)} /> Trail</label>
+            {demoPathPoints.map((point, i) => <button key={i} onMouseEnter={() => setHoveredWaypoint(i)} onMouseLeave={() => setHoveredWaypoint(null)} onFocus={() => setHoveredWaypoint(i)} onBlur={() => setHoveredWaypoint(null)} className="rounded border border-purple-600 px-2">Waypoint {i + 1}</button>)}
+          </div>
           <div style={{ height: 540 }} className="w-full">
-            <Map2D world={demoWorld} telemetry={demoTelemetry} pathPoints={demoPathPoints} />
+            <WarehouseView view={mapView} trailKey={activeScenario} quality="low" world={demoWorld} telemetry={demoTelemetry} pathPoints={demoPathPoints}
+              planWaypoints={demoPathPoints.map(p => ({ ...p, max_speed: scenario.status === 'SLOW' ? 0.3 : 1 }))}
+              showHeatmap={showHeatmap} showTrail={showTrail} safetyState={scenario.status === 'SAFE' ? 'OK' : scenario.status}
+              hoveredWaypointIdx={hoveredWaypoint} missionGoal={demoPathPoints[demoPathPoints.length - 1]} />
           </div>
         </div>
 

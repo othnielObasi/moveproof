@@ -97,7 +97,7 @@ export function Building({ world }: { world: WorldLayout }) {
     const clad = claddingTexture();
     const roof = roofTexture();
     return {
-      floor: new THREE.MeshStandardMaterial({ map, roughnessMap, roughness: 1, metalness: 0.0, envMapIntensity: 0.9 }),
+      floor: new THREE.MeshStandardMaterial({ map, roughnessMap, roughness: 0.88, metalness: 0.03, envMapIntensity: 0.9 }),
       apron: new THREE.MeshStandardMaterial({ color: "#5d5e5f", roughness: 0.95 }),
       wall: new THREE.MeshStandardMaterial({ map: clad, color: "#f2f4f5", roughness: 0.55, metalness: 0.35 }),
       wallOut: new THREE.MeshStandardMaterial({ map: clad, color: "#9aa7b4", roughness: 0.5, metalness: 0.4 }),
