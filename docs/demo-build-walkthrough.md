@@ -21,8 +21,9 @@
 **Narration:**
 
 > "MoveProof is a three-service stack: a FastAPI backend that
-> runs governance logic, a Next.js frontend dashboard, and a mock robot
-> simulator. Let me walk through building and running everything."
+> runs the governance gate and the Nemotron planner, a Next.js dashboard
+> with a 2D floor plan and a 3D twin, and a live warehouse simulator.
+> Let me walk through building and running everything."
 
 **Commands:**
 
@@ -35,9 +36,10 @@ tree -L 2 --dirsfirst -I 'node_modules|__pycache__|.git|*.egg-info'
 
 | Directory        | What it is                              |
 |------------------|-----------------------------------------|
-| `backend/`       | Python 3.11 FastAPI — governance engine |
-| `frontend/`      | Next.js 14 — operator dashboard         |
-| `sim/mock_sim/`  | Mock robot simulator                    |
+| `backend/`       | Python 3.11 FastAPI — governance engine, Nemotron planner |
+| `backend/bench/` | Safety benchmark (shares its engine with the simulator) |
+| `frontend/`      | Next.js 14 — operator dashboard, 2D + 3D views |
+| `sim/warehouse_sim/` | Live warehouse simulator            |
 | `docker-compose.yml`        | Local dev orchestration    |
 | `docker-compose.vultr.yml`  | Production orchestration   |
 | `deploy/`        | Vultr deployment script                 |
@@ -63,7 +65,7 @@ cp .env.example .env
 cat .env.example
 ```
 
-**Point out:** `DATABASE_URL`, `JWT_SECRET`, `SIM_TOKEN`, `GEMINI_API_KEY`.
+**Point out:** `NEBIUS_API_KEY` and `LLM_PROVIDER=nemotron` (the planner), `TAVILY_API_KEY` (hazard lookups), `RECEIPT_SIGNING_KEY` (signed receipts), `DATABASE_URL`, `SIM_TOKEN`. Keep the real values off screen.
 
 ---
 
@@ -81,7 +83,7 @@ cat .env.example
 docker compose build
 
 # Show the built images
-docker images | grep -E 'moveproof|mock'
+docker images | grep -E 'moveproof|warehouse'
 ```
 
 **While building, explain:**
@@ -92,8 +94,9 @@ docker images | grep -E 'moveproof|mock'
 - **Frontend** (`frontend/Dockerfile`): Node 20 Alpine, installs npm deps.
   Production uses `Dockerfile.prod` with a separate build stage that bakes
   in `NEXT_PUBLIC_API_BASE`.
-- **Simulator** (`sim/mock_sim/Dockerfile`): Lightweight Python image with
-  just FastAPI and Uvicorn.
+- **Simulator** (`sim/warehouse_sim/Dockerfile`): Lightweight Python image,
+  built from the repo root because it copies the benchmark engine from
+  `backend/bench` — the live demo and the benchmark run in the same world.
 
 ---
 
@@ -177,8 +180,8 @@ docker compose exec backend alembic -c /app/alembic.ini history --verbose | head
 
 **Narration:**
 
-> "The backend has a full test suite covering governance logic, API endpoints,
-> and adversarial scenarios."
+> "The backend has 221 tests covering the governance gate, the live run loop,
+> the safety benchmark, Nemotron routing, signed receipts and the Tavily firewall."
 
 **Commands:**
 
@@ -192,8 +195,8 @@ pytest -q --tb=short
 cd ..
 ```
 
-**Point out:** Test count, all passing, coverage of governance engine and
-API smoke tests.
+**Point out:** Test count, all passing, and `test_live_safety.py`, which proves
+a denied move stops the robot and nothing unapproved executes.
 
 ```bash
 # Frontend build verification (type-check + production bundle)
@@ -243,7 +246,7 @@ docker compose -f docker-compose.vultr.yml build
 
 **Show:** Open `.github/workflows/` in the editor and briefly scroll through:
 
-- `ci.yml` — tests + Docker build verification
+- `ci.yml` — tests, frontend build, Docker builds (backend, warehouse simulator)
 - `deploy.yml` — Fly.io backend + Vercel frontend
 - `provision_vultr_env.yml` — SSH into Vultr, pull code, rebuild containers
 

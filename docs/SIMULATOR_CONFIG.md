@@ -2,257 +2,146 @@
 
 ## Overview
 
-The **SIM_TOKEN** and **SIM_BASE_URL** connect your backend to the robot simulator.
+The backend drives a robot simulator over HTTP. The default is the **warehouse simulator** ([`sim/warehouse_sim`](../sim/warehouse_sim/server.py)), which runs the safety benchmark's deterministic engine ([`backend/bench/world.py`](../backend/bench/world.py)) in real time, so the live demo and the benchmark share one world.
 
 ```
 ┌─────────────────┐                    ┌─────────────────┐
 │    BACKEND      │  ──HTTP + TOKEN──▶ │   SIMULATOR     │
-│   (FastAPI)     │                    │  (Mock/Gazebo)  │
+│   (FastAPI)     │                    │ warehouse_sim   │
 │   Port 8080     │  ◀──Telemetry───   │   Port 8090     │
 └─────────────────┘                    └─────────────────┘
 ```
 
+The original mock simulator (`sim/mock_sim`) is kept for comparison under the Docker Compose `legacy` profile: `docker compose --profile legacy up mock-sim` (port 8091).
+
+## Running It
+
+| How | Command |
+|---|---|
+| Docker Compose | `docker compose up -d` (service `warehouse-sim`) |
+| Docker only | `docker build -f sim/warehouse_sim/Dockerfile -t moveproof-warehouse-sim .` then `docker run -p 8090:8090 moveproof-warehouse-sim` (build from the repo root: the image copies the engine from `backend/bench`) |
+| Local | `pip install -r sim/warehouse_sim/requirements.txt` then, from the repo root, `PYTHONPATH=backend uvicorn server:app --app-dir sim/warehouse_sim --port 8090` |
+| Fly.io | Runs beside the backend on `127.0.0.1:8090` via the `Procfile` |
+
 ## Configuration
 
-### 1. SIM_BASE_URL
+### Simulator environment
 
-Where the simulator is running.
+| Variable | Default | Description |
+|---|---|---|
+| `SIM_TICK_HZ` | `10` | Physics rate |
+| `SIM_SPEED` | `1.0` | Time multiplier (`2.0` = twice real time) |
+| `SIM_SEED` | `42` | Seed for site activity; the same seed replays the same session |
+| `SIM_TOKEN` | empty | Shared secret; when set, every call except `/health` needs `X-Sim-Token` |
 
-| Environment | Value |
+### Backend environment
+
+| Variable | Description |
+|---|---|
+| `SIM_BASE_URL` | Where the simulator runs (see below) |
+| `SIM_TOKEN` | Must match the simulator's token |
+
+| Environment | `SIM_BASE_URL` |
 |-------------|-------|
-| Local (Docker) | `http://localhost:8090` |
 | Local (same machine) | `http://localhost:8090` |
-| Docker Compose | `http://sim:8090` |
-| Remote server | `http://your-sim-server:8090` |
+| Docker Compose (dev) | `http://warehouse-sim:8090` |
+| Docker Compose (Vultr) | `http://sim:8090` |
+| Fly.io | `http://127.0.0.1:8090` |
 
-### 2. SIM_TOKEN
+### Generate a token
 
-A shared secret that authenticates backend → simulator requests.
-
-#### Generate a Token:
 ```bash
-# Method 1: OpenSSL
 openssl rand -hex 16
-# Output: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
-
-# Method 2: Python
+# or
 python -c "import secrets; print(secrets.token_hex(16))"
-
-# Method 3: UUID
-python -c "import uuid; print(uuid.uuid4().hex)"
 ```
 
-#### Set the Same Token in Both Places:
+Set the same value as `SIM_TOKEN` for both the backend and the simulator. A mismatch returns `401 Unauthorized simulator call`.
 
-**Backend (.env):**
-```env
-SIM_BASE_URL=http://localhost:8090
-SIM_TOKEN=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
-```
+## The World
 
-**Simulator (environment):**
-```bash
-# When running mock simulator
-export SIM_TOKEN=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
-python server.py
+Defined in [`backend/bench/layout.json`](../backend/bench/layout.json):
 
-# Or in docker-compose.yml
-services:
-  sim:
-    environment:
-      - SIM_TOKEN=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
-```
+| Zone | Speed limit | Description |
+|------|-------------|-------------|
+| `aisle` | 0.5 m/s | Racking aisles with pedestrian traffic |
+| `corridor` | 0.7 m/s | Main transit corridor; the forklift runs here |
+| `staging` | 0.3 m/s | Buffer area |
+| `loading_bay` | 0.4 m/s | Dock area |
 
-## How It Works
+- Geofence: 40 m × 25 m (x: 0–40, y: 0–25)
+- 9 solid rack sections; 20 bays (`B-01`–`B-06` dock, `A-01`–`A-12` pick face, `S-01`–`S-02` staging)
+- Charging stations, packing stations and fire exits
+- 13 hotspots where people cross (cross-aisles, corridor, packing stations, dock doors)
 
-1. **Backend** makes request to simulator:
-   ```
-   GET http://localhost:8090/telemetry
-   Headers:
-     X-Sim-Token: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
-   ```
+**Site activity** runs on its own: workers move between work destinations and pause to work, people cross at hotspots, and a forklift drives the corridor. Pedestrians yield before entering vehicle traffic and detour round blocked walking space. The forklift's driver stops for the robot.
 
-2. **Simulator** checks the token:
-   ```python
-   if request.headers["X-Sim-Token"] != SIM_TOKEN:
-       return 401 Unauthorized
-   ```
+## Hazards
 
-3. **If valid**, simulator returns data:
-   ```json
-   {
-     "x": 5.2,
-     "y": 3.1,
-     "speed": 0.5,
-     "human_detected": true
-   }
-   ```
-
-## Scenarios
-
-### Local Development (No Token)
-
-Simplest setup - no authentication:
-
-```env
-# Backend .env
-SIM_BASE_URL=http://localhost:8090
-SIM_TOKEN=
-```
+Inject from the run page buttons, through the backend (`POST /sim/scenario`), or directly:
 
 ```bash
-# Run simulator without token
-cd sim/mock_sim
-uvicorn server:app --port 8090
+curl -X POST http://localhost:8090/scenario \
+  -H "Content-Type: application/json" \
+  -d '{"scenario": "spill", "params": {"substance": "hydraulic oil"}}'
 ```
 
-### Docker Compose (With Token)
+| Scenario | Effect | Expected gate response |
+|----------|--------|------------------------|
+| `human_approach` | A worker walks toward the robot and stops about 2.5 m ahead | SLOW (`WORKER_PROXIMITY_06`, `HUMAN_PROXIMITY_02`) |
+| `human_too_close` | A worker steps out 0.8 m in front of the robot | STOP |
+| `path_blocked` | A pallet is dropped 2 m ahead | REPLAN (`OBSTACLE_CLEARANCE_03`) |
+| `spill` | A spill appears 3 m ahead; the warehouse system reports what was spilled | Hazard zone (`HAZARD_EXCLUSION_08`, `HAZARD_SLOW_09`) |
+| `forklift_crossing` | The forklift drives across the robot's path on the corridor | REPLAN or hold (moving obstacle) |
+| `clear` | Remove injected hazards | SAFE |
 
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  backend:
-    build: ./backend
-    environment:
-      - SIM_BASE_URL=http://sim:8090
-      - SIM_TOKEN=${SIM_TOKEN}
-    ports:
-      - "8080:8080"
-  
-  sim:
-    build: ./sim/mock_sim
-    environment:
-      - SIM_TOKEN=${SIM_TOKEN}
-    ports:
-      - "8090:8090"
-```
+## Seeded Replay
 
 ```bash
-# .env file (shared)
-SIM_TOKEN=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+# Replay benchmark scenario 17 exactly (start, goal, people and timing)
+curl -X POST http://localhost:8090/seed -H "Content-Type: application/json" \
+  -d '{"seed": 17, "mode": "benchmark"}'
+
+# Load a different live site
+curl -X POST http://localhost:8090/seed -H "Content-Type: application/json" \
+  -d '{"seed": 7, "mode": "live"}'
 ```
 
-### Production (Fly.io + External Sim)
+The benchmark response includes the scenario summary and its goal bay. The same call is available through the backend as `POST /sim/seed`.
 
-```bash
-# Set on Fly.io
-fly secrets set SIM_BASE_URL=https://your-sim.example.com
-fly secrets set SIM_TOKEN=your_production_token
-```
+## Robot Camera
 
-### GitHub Actions
-
-```yaml
-# In deploy.yml
-- name: Deploy to Fly.io
-  run: |
-    flyctl secrets set \
-      SIM_BASE_URL="${{ secrets.SIM_BASE_URL }}" \
-      SIM_TOKEN="${{ secrets.SIM_TOKEN }}"
-```
-
-## Without a Real Simulator
-
-If you don't have a simulator running:
-
-1. **Demo still works** - The dashboard uses mock data
-2. **Gemini adapter works** - Falls back to mock planning
-3. **Governance works** - Evaluates any input
-
-The SIM connection is only needed for:
-- Real-time robot telemetry
-- Sending commands to actual robot
-- Gazebo/Isaac Sim integration
+`GET /frame?size=512&view_m=12` returns a heading-up, top-down PNG around the robot, with no text, for a vision model. Through the backend: `GET /sim/frame`.
 
 ## Simulator Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/telemetry` | GET | Current robot state + perception |
-| `/world` | GET | Map, obstacles, zones, bays |
-| `/command` | POST | Send movement commands (MOVE_TO, STOP, WAIT) |
-| `/scenario` | POST | Inject a test scenario |
-| `/scenarios` | GET | List all scenarios with metadata |
-| `/scenarios/sequences` | GET | List scripted scenario sequences |
-| `/scenarios/sequences/{id}` | GET | Get steps for a specific sequence |
+| `/health` | GET | Engine, mode and seed |
+| `/telemetry` | GET | Robot state, people, vehicles, obstacles and perception |
+| `/world` | GET | Geofence, zones, racks, features, bays, obstacles, hotspots |
+| `/command` | POST | `MOVE_TO` / `STOP` / `WAIT` |
+| `/reset` | POST | Robot back to its start position |
+| `/scenarios` | GET | Available hazards |
+| `/scenario` | POST | Inject a hazard |
+| `/seed` | POST | Benchmark replay or live site by seed |
+| `/frame` | GET | Robot camera frame (PNG) |
+| `/path/smooth` | POST | Route between waypoints along the aisles |
 
-## World Configuration
+## Without a Simulator
 
-The simulator loads `world.json` which defines the warehouse layout:
-
-| Zone | Y Range | Speed Limit | Description |
-|------|---------|-------------|-------------|
-| `aisle` | 0–12 | 0.5 m/s | Shelf aisles with pedestrian traffic |
-| `corridor` | 12–15 | 0.7 m/s | Transit corridor between zones |
-| `loading_bay` | 15–25 | 0.4 m/s | Dock area with forklifts and workers |
-
-Geofence: 40 m × 25 m (x: 0–40, y: 0–25)
-
-## Scenario Injection
-
-Inject deterministic scenarios to test governance policies:
-
-```bash
-# Place human ~2.5m ahead (triggers SLOW)
-curl -X POST http://localhost:8090/scenario \
-  -H "Content-Type: application/json" \
-  -d '{"scenario": "human_approach"}'
-
-# Reset to defaults
-curl -X POST http://localhost:8090/scenario \
-  -H "Content-Type: application/json" \
-  -d '{"scenario": "clear"}'
-```
-
-### Available Scenarios
-
-| Scenario | Policies Exercised | Expected State |
-|----------|-------------------|----------------|
-| `human_approach` | HUMAN_PROXIMITY_02 | SLOW |
-| `human_too_close` | HUMAN_PROXIMITY_02 | STOP |
-| `path_blocked` | OBSTACLE_CLEARANCE_03 | REPLAN |
-| `speed_violation` | SAFE_SPEED_01 | SLOW |
-| `geofence_breach` | GEOFENCE_01 | STOP |
-| `low_confidence` | UNCERTAINTY_04, HUMAN_PROXIMITY_02 | SLOW |
-| `multi_worker_congestion` | WORKER_PROXIMITY_06 | STOP |
-| `loading_bay_rush` | SAFE_SPEED_01, WORKER_PROXIMITY_06, OBSTACLE_CLEARANCE_03 | STOP |
-| `corridor_squeeze` | OBSTACLE_CLEARANCE_03, HUMAN_PROXIMITY_02 | STOP |
-| `clear` | — | SAFE (reset) |
-
-Injected scenarios hold for ~5 seconds before ambient walking behaviour resumes.
-
-## Scripted Sequences
-
-Pre-built scenario sequences for demos and testing:
-
-```bash
-# List available sequences
-curl http://localhost:8090/scenarios/sequences
-
-# Get the governance demo sequence (5 steps)
-curl http://localhost:8090/scenarios/sequences/governance_demo
-```
-
-| Sequence | Steps | Purpose |
-|----------|-------|---------|
-| `governance_demo` | 5 | Core governance reactions: clear → approach → stop → blocked → clear |
-| `policy_sweep` | 11 | Exercise every policy in the catalog sequentially |
-| `stress_test` | 7 | Rapidly trigger compound policy violations |
-
-Each step includes `scenario`, `hold_seconds`, and `narration` fields.  
-The caller is responsible for timing — inject each scenario, wait `hold_seconds`, then advance.
+The governance API still evaluates any input (`POST /governance/evaluate`, the Policies page sandbox), but missions, live telemetry and the warehouse views need a simulator.
 
 ## Troubleshooting
 
 ### "Connection refused"
-- Simulator not running
-- Wrong SIM_BASE_URL
+- Simulator not running, or wrong `SIM_BASE_URL` (in Docker, use the service name, not `localhost`)
 
-### "401 Unauthorized"
-- Token mismatch between backend and simulator
-- Check both have EXACT same token
+### "401 Unauthorized simulator call"
+- `SIM_TOKEN` differs between backend and simulator
 
-### "Timeout"
-- Simulator is slow or overloaded
-- Network issues between backend and simulator
+### "sim error (needs the warehouse simulator)"
+- `/sim/frame` and `/sim/seed` exist only on the warehouse simulator, not the legacy mock simulator
+
+### `ModuleNotFoundError: No module named 'bench'`
+- Running locally without `PYTHONPATH=backend`, or building the image from `sim/warehouse_sim` instead of the repo root

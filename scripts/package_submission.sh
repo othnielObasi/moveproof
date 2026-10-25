@@ -15,9 +15,12 @@ mkdir -p "$OUTDIR"
 INCLUDE=(
   frontend
   backend
+  sim
+  docker-compose.yml
+  .env.example
+  LICENSE
   docker-compose.vultr.yml
   Dockerfile.fly
-  fly.toml
   README.md
   scripts/record_demo.js
 )

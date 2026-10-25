@@ -44,8 +44,10 @@ alternative.
 |---------------|--------------------------|------|--------------------|
 | **Frontend**  | Next.js 14, React 18, TypeScript, Tailwind CSS | 3000 | `frontend/` |
 | **Backend**   | FastAPI, Python 3.11, SQLAlchemy, Alembic       | 8080 | `backend/`  |
-| **Simulator** | FastAPI, Python 3.11 (mock robot telemetry)      | 8090 | `sim/mock_sim/` |
+| **Simulator** | FastAPI, Python 3.11 (live warehouse on the benchmark engine) | 8090 | `sim/warehouse_sim/` (+ `backend/bench/`) |
 | **Database**  | PostgreSQL 16 (production) / SQLite (dev fallback)| 5432 | — |
+
+The original mock simulator (`sim/mock_sim/`) is kept for comparison under the Compose `legacy` profile.
 
 In production (Vultr), an **Nginx** reverse proxy sits in front of everything,
 terminates TLS, and routes traffic:
@@ -78,30 +80,46 @@ Copy the example file and fill in your values:
 cp .env.example .env
 ```
 
-### Required Variables
+### Required in Production
 
 | Variable             | Description                                    | Example                          |
 |----------------------|------------------------------------------------|----------------------------------|
 | `DATABASE_URL`       | PostgreSQL connection string                   | `postgresql://moveproof:secret@db:5432/moveproof` |
 | `JWT_SECRET`         | Secret key for JWT token signing               | *(auto-generated in dev)*        |
-| `SIM_TOKEN`          | Shared auth token for simulator API            | *(auto-generated in dev)*        |
-| `POSTGRES_PASSWORD`  | PostgreSQL password (Docker Compose only)       | `changeme`                       |
+| `SIM_TOKEN`          | Shared auth token for simulator API            | *(empty in dev = no auth)*       |
+| `POSTGRES_PASSWORD`  | PostgreSQL password (Vultr compose)            | `openssl rand -hex 32`           |
+| `RECEIPT_SIGNING_KEY`| Base64 Ed25519 private key for signed receipts | *(dev key created in `data/`)*   |
 
-### Optional Variables
+### AI and Site Intelligence
+
+| Variable               | Default                         | Description                          |
+|------------------------|---------------------------------|--------------------------------------|
+| `NEBIUS_API_KEY`       | —                               | Nebius Token Factory key (Nemotron)  |
+| `LLM_ENABLED`          | `false`                         | Must be `true` for any model to plan |
+| `LLM_PROVIDER`         | `nemotron`                      | `nemotron`, `gemini`, `agentic` or `mock` |
+| `NEMOTRON_FAST_MODELS` | Lightning, Super                | Fast tier (per-step proposals; top two raced) |
+| `NEMOTRON_REASONING_MODEL` | Nemotron 3 Ultra            | Mission planning and replanning      |
+| `TAVILY_API_KEY`       | —                               | Live hazard lookups (labelled offline samples without it) |
+| `GEMINI_API_KEY`, `GEMINI_PROJECT_ID`, `GEMINI_ENABLED` | — | Gemini, the secondary provider |
+
+Check the Token Factory catalogue and both tiers with `python scripts/check_token_factory.py`.
+
+### Other Optional Variables
 
 | Variable               | Default                         | Description                          |
 |------------------------|---------------------------------|--------------------------------------|
 | `ENVIRONMENT`          | `development`                   | Set to `production` for prod guards  |
-| `GEMINI_API_KEY`       | —                               | Google Gemini API key (LLM features) |
-| `GEMINI_PROJECT_ID`    | —                               | Gemini project ID                    |
-| `GEMINI_ENABLED`       | `false`                         | Enable Gemini integration            |
+| `AUTH_REQUIRED`        | `true` in production, else `false` | Enforce authentication            |
 | `CORS_ORIGINS`         | `http://localhost:3000`         | Allowed CORS origins (comma-separated) |
-| `SIM_BASE_URL`         | `http://127.0.0.1:8090`        | Simulator endpoint                   |
+| `SIM_BASE_URL`         | `http://localhost:8090`         | Simulator endpoint                   |
 | `NEXT_PUBLIC_API_BASE` | `/api`                          | Frontend → backend API prefix        |
-| `SIM_TICK_HZ`          | `10`                            | Simulator tick rate                  |
+| `BACKEND_URL`          | `http://localhost:8080`         | Where the Next.js dev server proxies `/api` |
+| `SIM_TICK_HZ`          | `10`                            | Simulator physics rate               |
+| `SIM_SEED`             | `42`                            | Simulator seed (same seed, same session) |
 
 > **Note:** In production mode (`ENVIRONMENT=production`), the backend will
 > refuse to start if `JWT_SECRET` or `SIM_TOKEN` are missing.
+>
 
 ---
 
@@ -114,24 +132,26 @@ The fastest way to get everything running:
 git clone https://github.com/othnielObasi/moveproof.git
 cd moveproof
 
-# 2. Create your .env file
+# 2. Optional: create a .env file for API keys (Nemotron, Tavily)
 cp .env.example .env
-# Edit .env — at minimum set POSTGRES_PASSWORD
+# Set NEBIUS_API_KEY, LLM_ENABLED=true, LLM_PROVIDER=nemotron, TAVILY_API_KEY
 
 # 3. Build and start all services
 docker compose up --build
 ```
 
-This uses `docker-compose.yml` and starts four containers:
+This uses `docker-compose.yml` and starts four containers. The backend and frontend read `.env` if it exists; the local Postgres password is fixed (`moveproof`) in the compose file.
 
-| Container    | Image                   | Exposed Port |
-|--------------|-------------------------|-------------|
-| `frontend`   | `frontend/Dockerfile`   | `3000`      |
-| `backend`    | `backend/Dockerfile`    | `8080`      |
-| `mock-sim`   | `sim/mock_sim/Dockerfile` | `8090`    |
-| `postgres`   | `postgres:16`           | `5432`      |
+| Container       | Image                                | Exposed Port |
+|-----------------|--------------------------------------|-------------|
+| `frontend`      | `frontend/Dockerfile`                | `3000`      |
+| `backend`       | `backend/Dockerfile`                 | `8080`      |
+| `warehouse-sim` | `sim/warehouse_sim/Dockerfile` (built from the repo root) | `8090` |
+| `postgres`      | `postgres:16`                        | `5432`      |
 
-The backend automatically runs Alembic migrations on startup via `app.preflight`.
+The legacy mock simulator starts only with `docker compose --profile legacy up mock-sim` (port `8091`).
+
+The backend runs Alembic migrations on startup via `app.preflight`.
 
 **Access points:**
 
@@ -180,10 +200,11 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 
 ### Simulator
 
+From the repository root (the simulator imports the benchmark engine from `backend/bench`):
+
 ```bash
-cd sim/mock_sim
-pip install -r requirements.txt
-uvicorn server:app --host 0.0.0.0 --port 8090
+pip install -r sim/warehouse_sim/requirements.txt
+PYTHONPATH=backend uvicorn server:app --app-dir sim/warehouse_sim --host 0.0.0.0 --port 8090
 ```
 
 ### Frontend
@@ -222,6 +243,13 @@ workflow, which SSHes into the VM and runs the deploy script.
 | `JWT_SECRET`      | JWT signing secret                   |
 | `SIM_TOKEN`       | Simulator auth token                 |
 
+> **Nemotron, Tavily and receipt signing in production:** `docker-compose.vultr.yml`
+> sets the backend's environment explicitly and currently passes only the Gemini
+> keys. To use Nemotron, live Tavily lookups and a stable signing key, add
+> `NEBIUS_API_KEY`, `LLM_ENABLED`, `LLM_PROVIDER`, `TAVILY_API_KEY` and
+> `RECEIPT_SIGNING_KEY` to the backend service there (and to `/etc/moveproof/.env`).
+> `deploy/vultr-deploy.sh` also still requires `GEMINI_API_KEY`.
+
 ### Manual Deployment
 
 SSH into the VM and run the deploy script:
@@ -249,7 +277,7 @@ The deploy script handles:
 | frontend   | 0.5    | 512 MB | Next.js SSR               |
 | backend    | 1.0    | 1.5 GB | FastAPI + Alembic          |
 | db         | 1.0    | 1 GB   | PostgreSQL 16              |
-| sim        | 0.5    | 256 MB | Mock robot simulator       |
+| sim        | 0.5    | 256 MB | Warehouse simulator        |
 | **Total**  | **3.0**| **3.25 GB** | Fits a 4 GB VM       |
 
 ### Network Isolation
@@ -286,7 +314,9 @@ fly launch --name moveproof --region lhr
 
 # Set secrets
 fly secrets set \
-  GEMINI_API_KEY=... \
+  NEBIUS_API_KEY=... LLM_ENABLED=true LLM_PROVIDER=nemotron \
+  TAVILY_API_KEY=... \
+  RECEIPT_SIGNING_KEY=... \
   DATABASE_URL=... \
   JWT_SECRET=... \
   SIM_TOKEN=...
@@ -310,6 +340,11 @@ calls from the browser go directly to Fly.
 The `deploy.yml` workflow deploys both on each push to `main`:
 - **Fly.io**: Uses `flyctl` via `FLY_API_TOKEN`
 - **Vercel**: Uses `amondnet/vercel-action` via `VERCEL_TOKEN`
+
+The workflow sets only the Gemini, database and JWT secrets, on an app named
+`moveproof-api`, while `vercel.json` points the frontend at
+`https://moveproof.fly.dev`. The repo has no `fly.toml`; `fly launch` creates one. Set the Nemotron, Tavily and
+signing secrets yourself with `fly secrets set`, and keep the app names consistent.
 
 ---
 
@@ -367,8 +402,10 @@ Backups are retained for 7 days.
 ```bash
 cd backend
 pip install -e ".[dev]"
-pytest -q
+pytest -q                # 221 tests
 ```
+
+Run from `backend/`: the benchmark tests import the `bench` package from there.
 
 Key test files:
 
@@ -376,11 +413,33 @@ Key test files:
 |-------------------------|------------------------------------------|
 | `tests/test_api_smoke.py`       | API endpoint smoke tests          |
 | `tests/test_governance.py`      | Governance engine logic           |
-| `tests/test_phase_abc.py`       | Phase A/B/C feature tests         |
-| `tests/test_phase_d.py`         | Phase D feature tests             |
+| `tests/test_live_safety.py`     | Live run loop: denied moves stop the robot; nothing unapproved executes |
+| `tests/test_bench.py`           | Benchmark engine, arms and report |
+| `tests/test_nemotron_planner.py`| Nemotron tier routing and fallback |
+| `tests/test_planner_lessons.py` | Lessons from gate decisions       |
+| `tests/test_governed_rules_and_signing.py` | Rule-change workflow and Ed25519 receipts |
+| `tests/test_site_intel.py`      | Tavily firewall, corroboration, hazard zones |
+| `tests/test_safety_validator.py`| Post-run safety validation        |
 | `tests/test_plan_execution.py`  | Plan execution pipeline           |
 | `tests/test_reward_hacking.py`  | Adversarial / reward hacking      |
+| `tests/test_phase_abc.py`, `test_phase_d.py`, `test_new_services.py` | Earlier feature phases |
 | `tests/test_startup_cleanup.py` | Startup and cleanup behaviour     |
+
+### Simulator and Browser Tests
+
+From the repository root:
+
+```bash
+python -m pytest tests/test_live_traffic.py -q   # live site traffic
+
+npm install                                      # Playwright
+APP_URL=http://127.0.0.1:3000 node tests/warehouse-ui.smoke.cjs
+APP_URL=http://127.0.0.1:3000 node tests/warehouse-parity.smoke.cjs
+```
+
+The browser tests need the frontend running. They serve every API and WebSocket
+call from fixtures and fail on any mutation, so they never move a robot. Set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE` if Playwright's own Chromium is not installed.
 
 ### Frontend Build Verification
 
@@ -405,10 +464,10 @@ All workflows live in `.github/workflows/`:
 
 | Workflow                    | Trigger            | What it does                           |
 |-----------------------------|--------------------|----------------------------------------|
-| `ci.yml`                    | Push / PR to main  | Backend tests, frontend build, Docker build |
+| `ci.yml`                    | Push / PR to main  | Backend tests, frontend build, Docker builds (backend, mock sim, warehouse sim) |
 | `deploy.yml`                | Push to main       | Deploy to Fly.io + Vercel              |
 | `provision_vultr_env.yml`   | Push to main       | SSH deploy to existing Vultr VM        |
-| `provision_vultr_api.yml`   | Manual dispatch    | Create new Vultr VM via API            |
+| `provision_vultr_api.yml`   | Push to main / manual | Create new Vultr VM via API         |
 | `deploy_vultr.yml`          | Manual dispatch    | Create Vultr VM + deploy               |
 
 ### Typical Flow
@@ -460,10 +519,21 @@ An optional Prometheus-based Grafana dashboard is included at
 
 The backend can't connect to the simulator on port 8090.
 
-- **Local**: Make sure `mock-sim` is running — `docker compose up mock-sim`
+- **Local**: Make sure the simulator is running — `docker compose up warehouse-sim`
 - **Docker**: Verify `SIM_BASE_URL` uses the container hostname, not `localhost`
-  (e.g. `http://mock-sim:8090` in `docker-compose.yml`,
+  (`http://warehouse-sim:8090` in `docker-compose.yml`,
   `http://sim:8090` in `docker-compose.vultr.yml`)
+
+### Simulator exits with `No module named 'bench'`
+
+Build the warehouse simulator image from the repository root
+(`docker build -f sim/warehouse_sim/Dockerfile .`), or run it locally with
+`PYTHONPATH=backend`.
+
+### Planning always uses the deterministic fallback
+
+`LLM_ENABLED` must be `true` and `NEBIUS_API_KEY` set in the backend's own
+environment. Check with `GET /llm/models`.
 
 ### Frontend shows "loading" indefinitely
 

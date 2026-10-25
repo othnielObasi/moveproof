@@ -101,8 +101,21 @@ class Settings(BaseSettings):
     nemotron_enabled: bool = True
     nemotron_fast_models: str = "nvidia/Nemotron-3_5-Lightning,nvidia/nemotron-3-super-120b-a12b"
     nemotron_reasoning_model: str = "nvidia/Nemotron-3-Ultra-550b-a55b"
-    nemotron_fast_timeout_s: float = 6.0
-    nemotron_reasoning_timeout_s: float = 15.0
+    nemotron_fast_timeout_s: float = 10.0  # fast models reason too; 2048-token cap
+    nemotron_reasoning_timeout_s: float = 30.0  # Ultra may think ~8k tokens (~20 s)
+
+    # Vision: an NVIDIA vision-language model reads the robot camera. Its output is
+    # cross-checked against the simulator and can only add caution, never remove it.
+    vision_enabled: bool = True
+    vision_model: str = "nvidia/Nemotron-3.5-Super-VL"
+    vision_interval_s: float = 5.0      # one check per run every N seconds
+    vision_timeout_s: float = 15.0
+    vision_match_m: float = 1.2         # a sighting within this distance of a real object counts as a match
+    vision_caution_ttl_s: float = 8.0   # how long an unconfirmed sighting slows the robot
+
+    @property
+    def vision_configured(self) -> bool:
+        return bool(self.nebius_api_key and self.vision_enabled)
 
     # ------------------------------------------------------------
     # LLM / Agent Configuration

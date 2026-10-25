@@ -45,8 +45,6 @@ def bay_directory_text(bays: List[Dict[str, Any]]) -> str:
         lines.append(f"  {label:20s} → x={b['x']}, y={b['y']}")
     return "\n".join(lines)
 
-_JSON_RE = re.compile(r"(\{.*\}|\[.*\])", re.DOTALL)
-
 # Model cascade: flash first (fastest) → robotics-er → heavier models
 MODEL_CASCADE: List[str] = [
     "gemini-2.5-flash",                # Fastest, best quota
@@ -66,11 +64,36 @@ FAST_CASCADE: List[str] = [
 
 
 def _extract_json(text: str) -> Any:
-    """Extract first JSON object/array from a string."""
-    m = _JSON_RE.search(text.strip())
-    if not m:
-        raise ValueError("No JSON found in model output")
-    return json.loads(m.group(1))
+    """Extract the first complete JSON object/array from a string.
+
+    Models often wrap JSON in prose or code fences, or follow it with more text
+    or a second object. Decoding from each opening brace in turn returns the
+    first value that parses, instead of everything between the first '{' and
+    the last '}' (which fails with "Extra data" when two objects appear).
+    """
+    s = (text or "").strip()
+    decoder = json.JSONDecoder()
+    first_list = None
+    i = 0
+    while i < len(s):
+        if s[i] in "{[":
+            try:
+                obj, end = decoder.raw_decode(s, i)
+            except json.JSONDecodeError:
+                i += 1
+                continue
+            # Callers expect an object; a list found first is often a fragment
+            # (e.g. a waypoint array quoted in reasoning), so keep looking.
+            if isinstance(obj, dict):
+                return obj
+            if first_list is None:
+                first_list = obj
+            i = end
+            continue
+        i += 1
+    if first_list is not None:
+        return first_list
+    raise ValueError("No JSON found in model output")
 
 
 # Shared httpx client — reuse connections across calls

@@ -674,16 +674,22 @@ export function ZoneMarking({ zone }: { zone: Zone }) {
   useFrame(({ clock }) => {
     if (edge.current) edge.current.opacity = 0.6 + 0.35 * Math.sin(clock.elapsedTime * 4);
   });
+  // Vision caution zones have no no-entry radius: only the slow ring is drawn
+  const noEntry = zone.radius > 0.1;
   return (
     <group position={[zone.x, 0.016, -zone.y]} rotation={[-Math.PI / 2, 0, 0]}>
-      <mesh>
-        <circleGeometry args={[zone.radius, 64]} />
-        <meshBasicMaterial color="#ef4444" transparent opacity={0.14} depthWrite={false} toneMapped={false} />
-      </mesh>
-      <mesh>
-        <ringGeometry args={[zone.radius - 0.07, zone.radius, 96]} />
-        <meshBasicMaterial ref={edge} color="#ef4444" transparent opacity={0.9} depthWrite={false} toneMapped={false} />
-      </mesh>
+      {noEntry && (
+        <mesh>
+          <circleGeometry args={[zone.radius, 64]} />
+          <meshBasicMaterial color="#ef4444" transparent opacity={0.14} depthWrite={false} toneMapped={false} />
+        </mesh>
+      )}
+      {noEntry && (
+        <mesh>
+          <ringGeometry args={[zone.radius - 0.07, zone.radius, 96]} />
+          <meshBasicMaterial ref={edge} color="#ef4444" transparent opacity={0.9} depthWrite={false} toneMapped={false} />
+        </mesh>
+      )}
       <mesh>
         <ringGeometry args={[zone.slow_radius - 0.04, zone.slow_radius, 96]} />
         <meshBasicMaterial color="#f59e0b" transparent opacity={0.55} depthWrite={false} toneMapped={false} />

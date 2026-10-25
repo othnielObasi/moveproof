@@ -5,6 +5,7 @@ import { getRun, listEvents, stopRun, operatorOverride, getWorld, getTelemetry, 
 import { WarehouseView } from "@/components/WarehouseView";
 import { ScoreCard } from "@/components/ScoreCard";
 import { SiteIntelPanel } from "@/components/SiteIntelPanel";
+import { VisionPanel } from "@/components/VisionPanel";
 import { IntrospectionPanel } from "@/components/IntrospectionPanel";
 import { wsUrlForRun } from "@/lib/ws";
 import type { WsMessage } from "@/lib/types";
@@ -1391,7 +1392,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 {lastDecision.governance?.decision === "APPROVED" && !isFullscreen && (
                   <div className="bg-green-500/5 border border-green-500/20 rounded p-2 space-y-1">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-green-400 font-semibold text-[10px] uppercase tracking-wider">All 10 Policies Passed</span>
+                      <span className="text-green-400 font-semibold text-[10px] uppercase tracking-wider">All 11 Policies Passed</span>
                       <span className="text-[10px] text-green-400/60 font-mono">0 denied · 0 constrained</span>
                     </div>
                     {[
@@ -1432,6 +1433,9 @@ export default function RunPage({ params }: { params: { runId: string } }) {
 
           {/* Tavily site intelligence (untrusted input) */}
           <SiteIntelPanel />
+
+          {/* NVIDIA vision model on the robot camera, cross-checked with sensors */}
+          <VisionPanel runId={runId} />
 
           {/* Compact Telemetry */}
           <CollapsibleCard title="Live Telemetry" defaultOpen={false}>

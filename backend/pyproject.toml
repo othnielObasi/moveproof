@@ -24,7 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=2.9.9"]
-dev = ["pytest>=8.0.0", "ruff>=0.4.0"]
+dev = ["pytest>=8.0.0", "ruff>=0.4.0", "matplotlib>=3.8"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

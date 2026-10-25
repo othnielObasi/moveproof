@@ -57,7 +57,7 @@ export function RobotCamera({ active = true, intervalMs = 1000 }: { active?: boo
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] text-slate-400">
         <span><i className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ background: "#f0781e" }} />person</span>
         <span><i className="inline-block w-2 h-2 mr-1 align-middle" style={{ background: "#ebbe14" }} />forklift</span>
-        <span><i className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ background: "#3c82d2" }} />spill</span>
+        <span><i className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ background: "#6ed2eb" }} />spill</span>
         <span><i className="inline-block w-2 h-2 mr-1 align-middle" style={{ background: "#965f2d" }} />pallet</span>
         <span><i className="inline-block w-2 h-2 mr-1 align-middle" style={{ background: "#4a3e34" }} />racking</span>
       </div>

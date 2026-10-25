@@ -119,11 +119,27 @@ def test_integrity_clean_run(db):
     assert "verdict" in result
 
 
-def test_integrity_cross_run_insufficient(db):
+def test_integrity_cross_run_insufficient():
+    # Own empty database: the shared test DB holds finished runs from other tests
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.db.session import Base
+    import app.db.models  # noqa: F401  (registers tables)
     from app.services.integrity_monitor import check_cross_run_integrity
 
-    result = check_cross_run_integrity(db)
-    assert result["status"] == "insufficient_data"
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    session = sessionmaker(bind=eng)()
+    try:
+        _make_run(session, status="completed")
+        _make_run(session, status="stopped")
+        session.commit()
+        result = check_cross_run_integrity(session)
+        assert result["status"] == "insufficient_data"
+        assert result["runs_checked"] == 2
+    finally:
+        session.close()
 
 
 # ── Persistent Memory Tests ──

@@ -22,6 +22,13 @@ import time
 
 import httpx
 
+# Windows consoles default to cp1252, which cannot print the check marks below
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 BASE_URL = os.environ.get("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1").rstrip("/")
 FAST = [m.strip() for m in os.environ.get(
     "NEMOTRON_FAST_MODELS", "nvidia/Nemotron-3_5-Lightning,nvidia/nemotron-3-super-120b-a12b"

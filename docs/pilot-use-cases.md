@@ -9,6 +9,8 @@
 **MoveProof solves:**
 - Real-time geofence enforcement prevents robots from entering restricted zones
 - Human proximity policies enforce SLOW/STOP automatically when workers are nearby
+- Spills and dropped pallets become no-entry zones the robot must route round
+- Ed25519-signed receipts let the insurer verify each decision independently, and the safety benchmark shows what the gate prevents (1,262 unsafe moves without it, 0 with it, on the same seeded missions)
 - Every action + decision hash-chained → downloadable compliance report for insurer
 - Operator dashboard shows live safety state for all missions
 

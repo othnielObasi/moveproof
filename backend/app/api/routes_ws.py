@@ -72,21 +72,8 @@ async def ws_run(run_id: str, ws: WebSocket):
     logger.info("WS connect: run=%s", run_id)
     await hub.connect(run_id, ws)
 
-    # Auto-resume run loop if it died (e.g. after deploy)
-    try:
-        from app.api.routes_runs import get_run_svc
-        from app.db.session import SessionLocal
-        from app.db.models import Run
-        db = SessionLocal()
-        try:
-            run = db.query(Run).filter(Run.id == run_id).first()
-            if run:
-                svc = get_run_svc()
-                svc.ensure_loop_running(run.id, run.status)
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("WS auto-resume failed for %s: %s", run_id, e)
+    # Watching a run never restarts it: a robot only moves after an explicit
+    # start or resume by an operator.
 
     try:
         while True:

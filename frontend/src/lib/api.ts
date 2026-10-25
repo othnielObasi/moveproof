@@ -490,3 +490,17 @@ export async function postBulletin(text: string, source = "noticeboard") {
   if (!r.ok) throw new Error(await parseErrorResponse(r, "Failed to post bulletin"));
   return r.json();
 }
+
+/* ── Vision: NVIDIA VLM reads the robot camera, cross-checked with sensors ── */
+
+export async function getPerceptionStatus() {
+  const r = await fetchWithRetry(`${API_BASE}/perception/status`, { cache: "no-store" });
+  if (!r.ok) throw new Error(await parseErrorResponse(r, "Failed to load vision status"));
+  return r.json();
+}
+
+export async function runPerceptionCheck() {
+  const r = await fetch(`${API_BASE}/perception/check`, { method: "POST" });
+  if (!r.ok) throw new Error(await parseErrorResponse(r, "Vision check failed"));
+  return r.json();
+}

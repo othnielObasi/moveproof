@@ -117,7 +117,7 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
     """
     from app.db.session import SessionLocal
     from app.schemas.governance import ActionProposal
-    LLM_PLAN_TIMEOUT = 20  # seconds — generous but bounded
+    LLM_PLAN_TIMEOUT = 40  # seconds — Ultra can think for ~20 s; the robot waits in "planning"
 
     db = SessionLocal()
     try:
@@ -387,9 +387,8 @@ def get_run(run_id: str, db: Session = Depends(get_db)):
     run = db.query(Run).filter(Run.id == run_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    # Auto-resume the run loop if it was lost due to a deploy/restart
-    svc = get_run_svc()
-    svc.ensure_loop_running(run.id, run.status)
+    # Reading a run never restarts it. A robot only moves after an explicit
+    # start or resume; startup marks runs left over from a restart as failed.
     return RunOut(
         id=run.id,
         mission_id=run.mission_id,

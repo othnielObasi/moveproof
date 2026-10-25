@@ -1,60 +1,72 @@
-Judge Checklist — MoveProof
+# Judge Checklist — MoveProof
 
-- [ ] Deployment
-  - Frontend and backend reachable; API docs accessible at `/docs`.
-  - Nginx config writable (deploy script may require root to edit `/etc/nginx`).
+Each item can be checked in the running app or with one API call. Replace `{run_id}` with a run from `GET /runs`.
 
-- [ ] Mission Planning
-  - Every mission start produces a PLAN event (configurable via `require_llm_plan_at_start`).
-  - Plans are multi-waypoint and include `max_speed` per waypoint.
+- [ ] **Deployment**
+  - Frontend, backend and simulator reachable; API docs at `/docs`; `GET /health` reports database and simulator.
 
-- [ ] Governance
-  - Decisions recorded as `DECISION` events with `governance` payload and `risk_score`.
-  - Execution attempts recorded as `EXECUTION` events and included in the chain-of-trust.
-  - Circuit breaker: 3 consecutive denials auto-escalate to NEEDS_REVIEW.
-  - `GET /governance/decisions/{run_id}` returns full decision history (filterable by decision/policy_state).
-  - `GET /governance/decisions/{run_id}/stats` returns aggregate counts and policy hit frequencies.
-  - `GET /governance/receipts/{run_id}` returns structured proof documents for each decision.
+- [ ] **NVIDIA Nemotron on Nebius Token Factory**
+  - `GET /llm/models` shows the provider and both tiers (fast: Nemotron 3.5 Lightning and Nemotron 3 Super; reasoning: Nemotron 3 Ultra).
+  - `GET /llm/usage` shows per-model latency (p50/p95) and tokens by tier.
+  - Each mission start produces a `PLAN` event with multi-waypoint plans and a `max_speed` per waypoint.
+  - Without a key, a deterministic planner runs, still governed.
 
-- [ ] Run Lifecycle & Intervention
-  - `POST /runs/{run_id}/pause` pauses an active run and logs an INTERVENTION event.
-  - `POST /runs/{run_id}/resume` resumes a paused run and logs an INTERVENTION event.
-  - `POST /operator/override` accepts actions: `resume`, `force_approve`, `replan`.
-  - All overrides create `OPERATOR_OVERRIDE:{ACTION}` events in the audit trail.
+- [ ] **NVIDIA vision, cross-checked**
+  - The run page's **Vision check** panel: Nemotron 3.5 Super VL reads the robot camera every 5 s; rings = sensors, dots = model.
+  - `POST /perception/check` runs one now; each check during a run is a `PERCEPTION` event in the hash chain.
+  - A hazard the model misses is logged as a fault (the gate keeps using sensors); a sighting the sensors don't confirm becomes a short slow zone and can never relax a rule.
 
-- [ ] Simulator Scenarios
-  - `POST /scenario` with `{"scenario": "human_approach"}` → governance SLOW state.
-  - `POST /scenario` with `{"scenario": "human_too_close"}` → governance STOP state.
-  - `POST /scenario` with `{"scenario": "speed_violation"}` → SAFE_SPEED_01 fires.
-  - `POST /scenario` with `{"scenario": "geofence_breach"}` → GEOFENCE_01 fires.
-  - `POST /scenario` with `{"scenario": "loading_bay_rush"}` → 3 policies fire simultaneously.
-  - `GET /scenarios` returns full scenario catalog with policies_exercised and expected_state.
-  - `GET /scenarios/sequences/governance_demo` returns a 5-step scripted demo sequence.
+- [ ] **Governance gate**
+  - `GET /policies` lists 11 policies with parameters, triggers and actions.
+  - Decisions are `DECISION` events with a `governance` payload and `risk_score`; executions are `EXECUTION` events in the same chain.
+  - A denied move never executes, and every denial sends STOP to the robot.
+  - Circuit breaker: 3 consecutive denials escalate to `NEEDS_REVIEW`.
+  - `GET /governance/decisions/{run_id}` and `/stats` return the decision history and policy hit counts.
 
-- [ ] UI / Presentation
-  - Run page shows compact agent reasoning with a "Show details" toggle.
-  - Confidence displays a smoothed percentage and animated bar.
-  - Waypoints highlight on hover and map shows focus ring.
-  - Pipeline stage is visible on the run UI (Planning → Ready → Executing → Done).
+- [ ] **Signed receipts and audit**
+  - `GET /governance/receipts/{run_id}` returns a receipt per decision.
+  - `GET /governance/receipts/{run_id}/{decision_id}/verify` checks its Ed25519 signature; the public key is at `GET /governance/signing-key`.
+  - `GET /compliance/verify/{run_id}` validates the hash chain.
 
-- [ ] APIs
-  - `/sim/world` returns full simulator world (geofence, obstacles, bays).
-  - `/bays` returns the bays directory for quick lookup.
-  - `/policies` returns all 8 policies with parameters, triggers, and actions.
-  - `/compliance/verify/{run_id}` validates hash-chain integrity.
+- [ ] **Safety benchmark**
+  - Results in [`backend/bench/results/rule_based`](../backend/bench/results/rule_based/README.md): 150 seeded missions per arm; unsafe moves executed 1,262 with no gate, 0 with the gate, 0 with gate + learning.
+  - Reproduce: `cd backend && python -m bench run --planner rule_based --rounds 5 --seeds-per-round 30`.
+  - Replay any benchmark case in the live simulator: `POST /sim/seed {"seed": N, "mode": "benchmark"}`.
 
-- [ ] Tests
-  - Integration test `backend/tests/test_plan_execution.py` verifies PLAN → DECISION → EXECUTION flow.
-  - `backend/tests/test_governance.py` verifies policy evaluation logic.
-  - All 28 tests pass: `cd backend && python -m pytest tests/ -q`
+- [ ] **Learning loop**
+  - `GET /agent/lessons` lists lessons distilled from gate decisions only.
+  - `PLAN` events record which lesson IDs shaped each plan.
 
-- [ ] Known Limitations
-  - LLM plans are stored in-memory; restart will lose in-flight plans unless `require_llm_plan_at_start` is set.
-  - Pause/resume state is in-memory; restarting the backend will lose pause flags for active runs.
-  - If Gemini API is not configured, deterministic fallback planning is used.
-  - Circuit breaker counter resets on backend restart.
+- [ ] **Governed rule changes**
+  - `GET /policies/active` shows rules in force, changeable thresholds with bounds, and fixed safety floors.
+  - A proposal (`POST /policies/proposals`) must pass replay (`/evaluate`), and a benchmark for any relaxation, then approval by someone other than the proposer, before `/activate`. `POST /policies/rollback` undoes it.
 
-Notes:
-- To require LLM plans at start, set `require_llm_plan_at_start=true` in backend `.env` and ensure Gemini keys are configured.
-- For judge demonstrations prefer running locally with docker-compose for full integration (backend + mock-sim + frontend).
-- Use `GET /scenarios/sequences/governance_demo` to get the recommended 5-step demo sequence.
+- [ ] **Site intelligence (Tavily, untrusted)**
+  - A spill gets a 1.2 m no-entry zone at once (`GET /site-intel/constraints`).
+  - A hazard class is enforced only when two authoritative sources agree; zones only tighten.
+  - The **Noticeboard bulletin** on the run page is quarantined and changes no rule (`POST /site-intel/screen` runs the same firewall on any text).
+
+- [ ] **Live warehouse and hazards**
+  - Run page hazard buttons: Human Near → SLOW; Too Close → STOP; Blocked → REPLAN; Spill → hazard zone; Forklift → robot holds or reroutes; Clear.
+  - Same via API: `POST /sim/scenario` with `human_approach`, `human_too_close`, `path_blocked`, `spill`, `forklift_crossing` or `clear`.
+
+- [ ] **UI**
+  - Run page switches between **3D warehouse** and **Floor plan** with the same paths, safety rings, risk cells and trail.
+  - 3D cameras: Overview, Follow and Robot eye; `/twin` shows the full-screen warehouse.
+  - Hovering a planner waypoint highlights it on the map.
+  - Pipeline stage is visible (Planning → Ready → Executing → Done).
+
+- [ ] **Run lifecycle and intervention**
+  - `POST /runs/{run_id}/pause` and `/resume` log `INTERVENTION` events.
+  - `POST /operator/override` accepts `resume`, `force_approve` and `replan`, each logged as `OPERATOR_OVERRIDE:{ACTION}`.
+
+- [ ] **Tests**
+  - `cd backend && python -m pytest tests/ -q` — 221 tests.
+  - `backend/tests/test_live_safety.py` proves denied moves stop the robot and nothing unapproved executes.
+  - Browser smoke tests in `tests/` check the run page in both views without sending a single robot command.
+
+- [ ] **Known limitations**
+  - The live run loop checks about once a second; the benchmark engine at 5 Hz. People can still reach a robot that is already braking (counted separately in the benchmark).
+  - Pause flags and the in-memory circuit-breaker cache reset on a backend restart.
+  - The benchmark at scale on Nebius Serverless Jobs is not done yet.
+  - Vision reads a rendered top-down camera, not a real camera feed.

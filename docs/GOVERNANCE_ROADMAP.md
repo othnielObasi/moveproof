@@ -5,6 +5,15 @@
 >
 > **Principle**: Do not treat this as reward-led autonomy.
 > Treat it as governance-bounded optimization inside a hard safety envelope.
+>
+> **Update (October 2026):** all 28 items below were closed before the hackathon period.
+> Since then: the planner moved to NVIDIA Nemotron on Nebius Token Factory; the live
+> simulator is `sim/warehouse_sim` (the benchmark engine, replacing `sim/mock_sim` as
+> the default); tuning is recommend-only and threshold changes go through governed
+> proposals with replay, benchmark, second-person approval and rollback; decisions are
+> Ed25519-signed; three policies were added (`PATH_CLEARANCE_07`, `HAZARD_EXCLUSION_08`,
+> `HAZARD_SLOW_09`); and a safety benchmark measures the gate. The implementation log
+> below is kept as written; the file reference at the end is current.
 
 ---
 
@@ -134,7 +143,7 @@ of robot position.
 
 **Status: ✅ Implemented**
 
-8 policies defined in `policy_catalog.yaml`, enforced in `rules_python.py`:
+8 policies (now 11; see the update note at the top) defined in `policy_catalog.yaml`, enforced in `rules_python.py`:
 
 | Policy ID | Constraint | Action |
 |-----------|-----------|--------|
@@ -597,20 +606,29 @@ summary for Phase E, which closed the remaining gaps.
 | Cross-run learning | `backend/app/services/cross_run_learning.py` |
 | Persistent memory | `backend/app/services/persistent_memory.py` |
 | Scoring engine | `backend/app/services/scoring_engine.py` |
-| Gemini planner | `backend/app/services/gemini_planner.py` |
+| Nemotron planner (primary) | `backend/app/services/nemotron_planner.py` |
+| Planner selection | `backend/app/services/llm_factory.py` |
+| Planner lessons | `backend/app/services/planner_lessons.py` |
+| Gemini planner (secondary) | `backend/app/services/gemini_planner.py` |
 | Agentic planner | `backend/app/services/agentic_planner.py` |
 | Agent router | `backend/app/services/agent_service.py` |
-| World model | `backend/app/world_model.py` |
+| Governed rule changes | `backend/app/policies/proposals.py`, `backend/app/policies/params.py` |
+| Receipt signing | `backend/app/utils/signing.py` |
+| Site intelligence | `backend/app/services/site_intel/` |
+| World model (gate's zone limits) | `backend/app/world_model.py` (reads `sim/mock_sim/world.json`) |
 | LLM endpoints | `backend/app/api/routes_llm.py` |
 | Run endpoints | `backend/app/api/routes_runs.py` |
 | Governance endpoints | `backend/app/api/routes_governance.py` |
+| Rule-change endpoints | `backend/app/api/routes_policy_proposals.py` |
 | Mission endpoints | `backend/app/api/routes_missions.py` |
 | Operator endpoints | `backend/app/api/routes_operator.py` |
-| Simulator | `sim/mock_sim/server.py` |
-| World definition | `sim/mock_sim/world.json` |
+| Safety benchmark | `backend/bench/` |
+| Simulator (live) | `sim/warehouse_sim/server.py`, `traffic.py`, `camera.py` |
+| World definition (live + benchmark) | `backend/bench/layout.json` |
+| Simulator (legacy) | `sim/mock_sim/server.py`, `world.json` |
 | Run detail UI | `frontend/src/app/runs/[runId]/page.tsx` |
 | Mission list UI | `frontend/src/app/missions/page.tsx` |
-| Map component | `frontend/src/components/Map2D.tsx` |
+| Map components | `frontend/src/components/WarehouseView.tsx`, `Map2D.tsx`, `twin/` |
 | API client | `frontend/src/lib/api.ts` |
 | DB models | `backend/app/db/models.py` |
 | Alembic migrations | `backend/alembic/versions/` |

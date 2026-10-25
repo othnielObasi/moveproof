@@ -196,17 +196,6 @@ class RunService:
         self._tasks[run_id] = asyncio.create_task(self._run_loop(run_id))
         logger.info("Launched run loop task for %s", run_id)
 
-    def ensure_loop_running(self, run_id: str, db_status: str) -> None:
-        """If the run is 'running' in DB but has no active asyncio task,
-        re-launch the loop.  This handles process restarts / deploys."""
-        if db_status != "running":
-            return
-        existing = self._tasks.get(run_id)
-        if existing and not existing.done():
-            return  # already alive
-        logger.info("Auto-resuming stale run loop for %s", run_id)
-        self._launch_loop(run_id)
-
     def rehydrate_plans(self, db: Session) -> None:
         """Load persisted PLAN events from DB for runs and populate in-memory plans.
 
@@ -241,24 +230,38 @@ class RunService:
         if run_id in self._stop_flags:
             self._stop_flags[run_id].set()
 
-        run = db.query(Run).filter(Run.id == run_id).first()
-        if run and run.status in ("running", "paused"):
-            run.status = "stopped"
-            run.ended_at = utc_now()
-            # Sync parent mission status
-            from app.db.models import Mission
-            mission = db.query(Mission).filter(Mission.id == run.mission_id).first()
-            if mission and mission.status == "executing":
-                mission.status = "paused"
-            db.commit()
+        # Halt the robot first: an operator stop must not wait on the database.
+        try:
+            await self.sim.send_command({"intent": "STOP", "params": {}})
+        except Exception as e:
+            logger.warning("Run %s: STOP command to robot failed: %s", run_id, e)
 
-        # Log INTERVENTION event
-        self._append_event(db, run_id, "INTERVENTION", {
-            "type": "STOP",
-            "actor": "operator",
-            "reason": "Manual stop requested",
-        })
-        db.commit()
+        # Record the stop. SQLite allows one writer, so if another write is in
+        # progress, retry instead of failing the operator's request.
+        from sqlalchemy.exc import OperationalError
+        from app.db.models import Mission
+        for attempt in range(5):
+            try:
+                run = db.query(Run).filter(Run.id == run_id).first()
+                if run and run.status in ("running", "paused", "planning"):
+                    run.status = "stopped"
+                    run.ended_at = utc_now()
+                    mission = db.query(Mission).filter(Mission.id == run.mission_id).first()
+                    if mission and mission.status == "executing":
+                        mission.status = "paused"
+                self._append_event(db, run_id, "INTERVENTION", {
+                    "type": "STOP",
+                    "actor": "operator",
+                    "reason": "Manual stop requested",
+                })
+                db.commit()
+                break
+            except OperationalError as e:
+                db.rollback()
+                if attempt == 4:
+                    raise
+                logger.warning("Run %s: database busy recording stop (%s); retrying", run_id, e)
+                await asyncio.sleep(1.0 + attempt)
 
         if self._ws_broadcast:
             await self._ws_broadcast(run_id, {"kind": "status", "data": {"status": "stopped"}})
@@ -435,6 +438,21 @@ class RunService:
                             self._append_event(db, run_id, etype, epayload)
                     except Exception as si_err:
                         logger.warning("Run %s: site intel failed: %s", run_id, si_err)
+
+                    # Vision: an NVIDIA VLM reads the robot camera in the background.
+                    # Results are cross-checked with the sensors and recorded here; an
+                    # unconfirmed sighting only adds a short slow zone (never less caution).
+                    try:
+                        from app.services.perception import perception, audit_summary
+                        for res in perception.drain_results(run_id):
+                            self._append_event(db, run_id, "PERCEPTION", audit_summary(res))
+                            if self._ws_broadcast:
+                                await self._ws_broadcast(run_id, {"kind": "perception", "data": res})
+                        if perception.due(run_id):
+                            asyncio.create_task(perception.run_check(self.sim, dict(telemetry), run_id))
+                        telemetry = perception.apply(telemetry)
+                    except Exception as vis_err:
+                        logger.warning("Run %s: vision step failed: %s", run_id, vis_err)
 
                     # --- Anti-spoofing: validate telemetry plausibility ---
                     if run_id not in self._tel_validators:
@@ -615,7 +633,9 @@ class RunService:
                             rationale="Following plan waypoint",
                         )
                     else:
-                        # No plan — agent proposes action (may call LLM)
+                        # No plan — agent proposes action (may call LLM).
+                        # Commit first so no write lock is held during the model call.
+                        db.commit()
                         world_state = None
                         try:
                             world_state = await self.sim.get_world()
@@ -843,6 +863,10 @@ class RunService:
                                 "policy_state": gov_decision.policy_state,
                             }
                             self._append_event(db, run_id, "REPLAN", replan_payload)
+                            # Commit before calling the model: an open write transaction would
+                            # hold SQLite's write lock for the whole call (up to ~30 s) and block
+                            # an operator's stop.
+                            db.commit()
 
                             # Attempt to generate a new plan via LLM
                             try:
@@ -900,7 +924,8 @@ class RunService:
                                     ]
                                     self._append_event(db, run_id, "PLAN", {
                                         "plan": new_plan,
-                                        "source": "fallback" if new_plan.get("model_used") == "deterministic_fallback"
+                                        # site_router means the model-free fallback was routed along the aisles
+                                        "source": "fallback" if new_plan.get("model_used") in ("deterministic_fallback", "site_router")
                                                   else _settings.planner_provider,
                                         "note": "Replan after governance denial",
                                         "blocked_waypoint": blocked_wp,
@@ -1088,6 +1113,23 @@ class RunService:
 
         logger.info("Run loop ended: %s", run_id)
 
+        # If an operator stopped the run but recording it failed, the run must not
+        # stay marked "running" with no loop behind it.
+        if self._stop_flags.get(run_id) and self._stop_flags[run_id].is_set():
+            try:
+                from app.db.session import SessionLocal
+                sdb = SessionLocal()
+                try:
+                    run = sdb.query(Run).filter(Run.id == run_id).first()
+                    if run and run.status in ("running", "planning", "paused"):
+                        run.status = "stopped"
+                        run.ended_at = utc_now()
+                        sdb.commit()
+                finally:
+                    sdb.close()
+            except Exception as st_err:
+                logger.warning("Could not mark stopped run %s: %s", run_id, st_err)
+
         # Planner learning loop: distil location-aware lessons from the gate's
         # decisions for every run ending (completed, stopped or failed — denials
         # in an aborted run are often the most instructive). Idempotent per run.
@@ -1103,6 +1145,11 @@ class RunService:
             logger.warning("Lesson distillation failed for %s: %s", run_id, dl_err)
 
         # Cleanup finished task references
+        try:
+            from app.services.perception import perception
+            perception.forget(run_id)
+        except Exception:
+            pass
         self._tasks.pop(run_id, None)
         self._stop_flags.pop(run_id, None)
         self._wp_denial_counts.pop(run_id, None)

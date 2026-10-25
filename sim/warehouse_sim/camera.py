@@ -3,8 +3,9 @@
 What the vision model sees. Deliberately plain, with no text or labels, so the
 model has to recognise hazards from shape and colour the way it would in a
 real overhead or fisheye view: racks dark, people orange, the forklift yellow,
-spills blue, pallets brown. The robot sits low in the frame facing up, so most
-of the view is what lies ahead.
+spills light cyan (kept well apart from the robot's dark blue, which the vision
+model otherwise confuses them with), pallets brown. The robot sits low in the
+frame facing up, so most of the view is what lies ahead.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ RACK = (74, 62, 52)
 PERSON = (240, 120, 30)
 PERSON_HEAD = (120, 55, 10)
 FORKLIFT = (235, 190, 20)
-SPILL = (60, 130, 210)
+SPILL = (110, 210, 235)
 PALLET = (150, 95, 45)
 OTHER = (110, 110, 120)
 ROBOT = (25, 90, 200)

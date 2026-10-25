@@ -1,5 +1,15 @@
 # Gemini Robotics 1.5 API Integration
 
+> **Status (October 2026):** Gemini is now the **secondary** planner. When a Nebius key is
+> set (`NEBIUS_API_KEY`, Nemotron enabled), the planner is NVIDIA Nemotron on Nebius Token
+> Factory ([`nemotron_planner.py`](../backend/app/services/nemotron_planner.py)): fast models
+> for per-step proposals, Nemotron Ultra for mission planning and replanning. Otherwise the
+> Gemini planner runs, and with no Gemini key either it returns deterministic plans
+> ([`llm_factory.py`](../backend/app/services/llm_factory.py)). The governance gate is the
+> same whichever model plans. This page describes the original Gemini integration; the
+> diagram's figures (for example the 0.70 risk threshold and "30% speed") are illustrative.
+> The live gate escalates at risk ≥ 0.75 and caps speeds per policy.
+
 ## How It Works
 
 ```
@@ -142,12 +152,14 @@
 
 ### Backend (FastAPI)
 - `POST /governance/evaluate` - Evaluate any action
-- `GET /governance/policies` - List active policies
-- `WS /ws/{run_id}` - Real-time updates
+- `GET /policies` - List active policies
+- `WS /ws/runs/{run_id}` - Real-time updates
 
-### Gemini Planner
-- `gemini_planner.py` - Calls Gemini Robotics-ER 1.5 API to generate ActionProposals
-- `AgentRouter` in `agent_service.py` - Routes to Gemini or mock planner
+### Planners
+- `llm_factory.py` - Picks Nemotron when configured, otherwise Gemini
+- `nemotron_planner.py` - NVIDIA Nemotron on Nebius Token Factory (primary)
+- `gemini_planner.py` - Calls Gemini Robotics-ER 1.5 API to generate ActionProposals (secondary; deterministic plans without a key)
+- `AgentRouter` in `agent_service.py` - Routes between planners
 
 ### Dashboard
 - Same UI works for mock AND Gemini

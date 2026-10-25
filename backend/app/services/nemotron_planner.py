@@ -194,7 +194,10 @@ class NemotronPlanner(GeminiPlanner):
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.2,
-            "max_tokens": 2048 if model == self.reasoning_model else 1024,
+            # Nemotron reasons before answering and the reasoning counts against
+            # max_tokens: Ultra was measured using up to ~4000 tokens on a live
+            # replan, so a tight cap cuts the JSON off. Keep room for thought + answer.
+            "max_tokens": 8192 if model == self.reasoning_model else 2048,
         }
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         t0 = _time.monotonic()
@@ -213,7 +216,12 @@ class NemotronPlanner(GeminiPlanner):
             usage = data.get("usage") or {}
             record["prompt_tokens"] = usage.get("prompt_tokens")
             record["completion_tokens"] = usage.get("completion_tokens")
-            content = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+            choice = (data.get("choices") or [{}])[0]
+            if choice.get("finish_reason") == "length":
+                record["truncated"] = True
+                logger.warning("Output from %s hit max_tokens (%s completion tokens); answer may be cut off",
+                               model, usage.get("completion_tokens"))
+            content = choice.get("message", {}).get("content") or ""
             text = strip_reasoning(content)
             if not text:
                 logger.warning("Empty content from %s (%sms)", model, record["latency_ms"])

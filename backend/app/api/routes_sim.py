@@ -32,7 +32,28 @@ async def get_telemetry():
         raise HTTPException(status_code=502, detail=f"sim error: {e}")
     # Include active hazard zones so every view shows what the gate enforces
     from app.services.site_intel.service import site_intel
-    return site_intel.observe(telemetry)
+    from app.services.perception import perception
+    return perception.apply(site_intel.observe(telemetry))
+
+
+@router.get("/perception/status")
+def perception_status():
+    """Vision model, settings, active caution zones and the latest checks."""
+    from app.services.perception import perception
+    return perception.status()
+
+
+@router.post("/perception/check")
+async def perception_check():
+    """Read the robot camera now with the vision model and compare it with the sensors."""
+    from app.config import settings
+    from app.services.perception import perception
+    if not settings.vision_configured:
+        raise HTTPException(status_code=503, detail="Vision needs NEBIUS_API_KEY (and VISION_ENABLED=true)")
+    try:
+        return await perception.check(sim)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"vision check failed (needs the warehouse simulator): {e}")
 
 
 @router.get("/sim/world", response_model=SimWorld)

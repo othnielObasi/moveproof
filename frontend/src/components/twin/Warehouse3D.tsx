@@ -280,7 +280,7 @@ function Scene(props: TwinProps & { focus: Pt | null; onCameraFootprint: (points
       {statics.map((o, i) => (
         <group key={`${o.type}-${i}`} onClick={(e) => { e.stopPropagation(); props.onSelect({ kind: "obstacle", index: obstacles.indexOf(o) }); }}><Obstacle o={o} /></group>
       ))}
-      {zones.map((z: any) => (
+      {zones.filter((z: any) => z.radius > 0).map((z: any) => (
         <ZoneCones key={`cones-${z.id}-${z.radius}`} zone={z} racks={layout.racks} bounds={g} />
       ))}
       {forklifts.map((f, i) => (
@@ -321,9 +321,15 @@ function Scene(props: TwinProps & { focus: Pt | null; onCameraFootprint: (points
             <group key={`zm-${z.id}`}>
               <ZoneMarking zone={z} />
               <Html position={[z.x, 1.3, -z.y]} center distanceFactor={14} zIndexRange={[15, 0]}>
-                <div style={{ background: "rgba(127,29,29,.92)", color: "#fee2e2", font: "700 11px system-ui", padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap", border: "1px solid #ef4444", pointerEvents: "none" }}>
-                  NO ENTRY · {z.label ?? "hazard"} · {Number(z.radius).toFixed(1)} m
-                </div>
+                {z.radius > 0.1 ? (
+                  <div style={{ background: "rgba(127,29,29,.92)", color: "#fee2e2", font: "700 11px system-ui", padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap", border: "1px solid #ef4444", pointerEvents: "none" }}>
+                    NO ENTRY · {z.label ?? "hazard"} · {Number(z.radius).toFixed(1)} m
+                  </div>
+                ) : (
+                  <div style={{ background: "rgba(120,53,15,.92)", color: "#fef3c7", font: "700 11px system-ui", padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap", border: "1px solid #f59e0b", pointerEvents: "none" }}>
+                    SLOW · {z.label ?? "vision sighting"} · ≤{Number(z.max_speed).toFixed(1)} m/s
+                  </div>
+                )}
               </Html>
             </group>
           ))}

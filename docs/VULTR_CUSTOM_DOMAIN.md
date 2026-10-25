@@ -41,7 +41,7 @@ Browser → https://moveproof.nov-tia.com
      ├── backend   (port 8080, bound to 127.0.0.1 only)
      ├── frontend  (port 3000, bound to 127.0.0.1 only)
      ├── db        (postgres:16, port 5432, bound to 127.0.0.1 only)
-     └── mock_sim  (port 8090, internal only)
+     └── sim       (warehouse simulator, port 8090, internal only)
 ```
 
 Ports 8080, 3000, and 5432 are **not** exposed to the internet — only Nginx on 80/443.
@@ -78,12 +78,12 @@ Expected: `"data": "104.238.128.128"` in the Answer section.
 
 **CORS origins** — changed from raw IP to domain:
 ```yaml
-CORS_ORIGINS: "https://moveproof.nov-tia.com,http://moveproof.nov-tia.com,http://localhost:3000"
+CORS_ORIGINS: "https://moveproof.nov-tia.com"
 ```
 
 **Database hostname** — Docker Compose service is named `db`, not `postgres`:
 ```yaml
-DATABASE_URL: "postgresql://moveproof:moveproof_production_2026@db:5432/moveproof"
+DATABASE_URL: "postgresql://moveproof:${POSTGRES_PASSWORD}@db:5432/moveproof"
 ```
 
 **Postgres port** — locked to localhost only:
@@ -322,10 +322,12 @@ Docker internal DNS only resolves the service name defined in docker-compose.yml
 **Fix:** In `docker-compose.vultr.yml`, change:
 ```yaml
 # Wrong
-DATABASE_URL: "postgresql://moveproof:moveproof_production_2026@postgres:5432/moveproof"
+DATABASE_URL: "postgresql://moveproof:<password>@postgres:5432/moveproof"
 # Correct
-DATABASE_URL: "postgresql://moveproof:moveproof_production_2026@db:5432/moveproof"
+DATABASE_URL: "postgresql://moveproof:<password>@db:5432/moveproof"
 ```
+
+The compose file now takes the password from `${POSTGRES_PASSWORD}` instead of a hardcoded value.
 
 ### Issue 3: Backend port not exposed to host
 
@@ -386,7 +388,7 @@ docker compose -f docker-compose.vultr.yml up -d frontend
 
 **Symptom:** Backend logs show `Cannot reach simulator` errors. Runs start but robot doesn't move. Sim telemetry returns empty or errors.
 
-**Cause:** Three problems:
+**Cause:** Three problems (at the time the `sim` service used `sim/mock_sim`; it now builds `sim/warehouse_sim/Dockerfile` from the repo root, which has its own CMD and a health check):
 1. The `sim` container's Dockerfile (`sim/mock_sim/Dockerfile`) has **no CMD or ENTRYPOINT** — without an explicit `command:` in docker-compose, the container starts and immediately exits.
 2. `SIM_BASE_URL` was not set in docker-compose, so the backend defaulted to `http://127.0.0.1:8090` — unreachable from inside the Docker network.
 3. `depends_on` was backwards — sim depended on backend instead of backend depending on sim.
@@ -436,6 +438,24 @@ Key detail: `listen 104.238.128.128:3000` (public IP only) — Docker keeps `127
 
 ---
 
+### Open item: Nemotron, Tavily and receipt-signing keys
+
+**Symptom:** `GET /llm/models` shows Gemini or the deterministic fallback instead of Nemotron; site intelligence reports offline samples; receipts are signed with a development key.
+
+**Cause:** The backend service in `docker-compose.vultr.yml` lists its environment explicitly and passes only `GEMINI_*`, `JWT_SECRET`, `SIM_TOKEN` and the database settings. Keys in `/opt/moveproof/.env` reach the backend only if the compose file references them.
+
+**Fix:** Add to the backend's `environment:` in `docker-compose.vultr.yml`:
+```yaml
+NEBIUS_API_KEY: "${NEBIUS_API_KEY}"
+LLM_ENABLED: "true"
+LLM_PROVIDER: "nemotron"
+TAVILY_API_KEY: "${TAVILY_API_KEY}"
+RECEIPT_SIGNING_KEY: "${RECEIPT_SIGNING_KEY}"
+```
+then set the values in `/opt/moveproof/.env` and restart the backend.
+
+---
+
 ## Quick Reference Commands
 
 ```bash
@@ -470,6 +490,7 @@ nginx -t && systemctl reload nginx
 certbot renew --dry-run
 
 # Nuclear option — stop everything and start fresh
+# WARNING: -v deletes the database volume (all runs, decisions and audit chains)
 docker compose -f docker-compose.vultr.yml down --remove-orphans -v
 fuser -k 5432/tcp 2>/dev/null
 docker compose -f docker-compose.vultr.yml build --no-cache
