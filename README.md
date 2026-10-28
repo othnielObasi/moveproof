@@ -209,7 +209,7 @@ MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.
 - [x] Planner learning loop: lessons distilled from gate decisions feed Nemotron's plans and replans, recorded on each plan
 - [x] Governed rule changes: propose, replay gate, separate approver, versioned activation, rollback
 - [x] Ed25519-signed governance receipts with a verification endpoint
-- [x] Safety benchmark (rule-based results in the repo; Nemotron run pending a key): deterministic seeded warehouse, three arms (no gate / gate / gate + learning), physical contact metrics, report and chart ([`backend/bench`](backend/bench))
+- [x] Safety benchmark: deterministic seeded warehouse, three arms (no gate / gate / gate + learning), physical contact metrics, report and chart ([`backend/bench`](backend/bench))
 - [x] Gate fix found by the benchmark: a robot too close to an obstacle can now back away slowly (it previously deadlocked)
 - [x] Enhanced warehouse: live simulator with moving workers, a forklift, spills and dropped pallets; seeded scenarios
 - [x] Live 3D digital twin of the warehouse with Overview, Follow and Robot-eye cameras and the governance layer drawn in the scene
@@ -219,6 +219,8 @@ MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.
 - [x] Nemotron verified end to end on live missions; fixes for reasoning output being cut off, model JSON parsing, and an operator stop that could fail while a model call was in flight
 - [x] Safety benchmark with Nemotron on Nebius Serverless Jobs: 824 unsafe moves proposed under the gate, 0 executed ([results](backend/bench/results/nemotron/README.md))
 - [x] Live demo on a Nebius AI Cloud VM with public-demo guardrails
+- [x] Task-drift guard: every plan and replan must end at the mission's destination without wandering, or the aisle route is used instead
+- [x] Rebuilt interface (Overview, Missions, Runs, Governance, Evidence), with learning and task checks shown on each run
 
 ---
 
