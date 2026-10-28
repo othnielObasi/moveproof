@@ -3,7 +3,9 @@
 > **Every robot move, proven safe before it happens.**
 > An NVIDIA Nemotron planner proposes. A deterministic governance gate decides. Every decision leaves a signed, hash-chained receipt.
 
-Built for the **Nebius × NVIDIA Global AI Hackathon** (Physical AI track): NVIDIA Nemotron models served on **Nebius Token Factory**.
+Built for the **Nebius × NVIDIA Global AI Hackathon** (Physical AI track): NVIDIA Nemotron models served on **Nebius Token Factory**, running on **Nebius AI Cloud**.
+
+**Live demo:** https://moveproof.213-239-186-67.sslip.io: plan a mission, then press **Spill**, **Too Close** or **Forklift** and watch the gate respond. It's one shared simulated robot: one mission runs at a time (others can watch it), missions stop after 4 minutes, and safety settings are read-only on the public demo.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
