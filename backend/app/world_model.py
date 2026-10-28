@@ -25,11 +25,15 @@ _DEFAULT_ZONES: List[Dict[str, Any]] = []
 _DEFAULT_BAYS: List[Dict[str, Any]] = []
 
 _world: Dict[str, Any] = {}
+# Inside the backend image only backend/ is present, so fall back to the
+# benchmark layout (same site, same zone speed limits) instead of bare defaults.
+_LAYOUT_PATH = _HERE.parent / "bench" / "layout.json"
 
 try:
-    with _WORLD_PATH.open("r", encoding="utf-8") as f:
+    _path = _WORLD_PATH if _WORLD_PATH.exists() else _LAYOUT_PATH
+    with _path.open("r", encoding="utf-8") as f:
         _world = json.load(f)
-    logger.info("Loaded world model from %s", _WORLD_PATH)
+    logger.info("Loaded world model from %s", _path)
 except Exception as e:
     logger.warning("Could not load world.json (%s), using defaults", e)
 

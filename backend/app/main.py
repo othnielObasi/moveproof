@@ -179,6 +179,9 @@ def root():
     }
 
 
+from app.demo_guard import DemoGuardMiddleware  # noqa: E402
+
+app.add_middleware(DemoGuardMiddleware)  # no-op unless PUBLIC_DEMO=true
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware, limiter=app.state.rate_limiter)
 app.add_middleware(

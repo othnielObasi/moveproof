@@ -1,0 +1,97 @@
+# MoveProof live demo on a Nebius AI Cloud VM.
+#
+#   Caddy (80/443, automatic HTTPS) → frontend:3000, backend:8080 (/api, /ws, /docs)
+#   backend → warehouse simulator (internal) and PostgreSQL (internal)
+#
+# Run from the repository root on the VM:
+#   docker compose -f deploy/nebius/web/docker-compose.yml --env-file .env up -d --build
+#
+# .env on the VM (never committed) must define SITE_ADDRESS, NEBIUS_API_KEY,
+# TAVILY_API_KEY, POSTGRES_PASSWORD, JWT_SECRET, SIM_TOKEN, RECEIPT_SIGNING_KEY.
+
+name: moveproof
+
+services:
+  caddy:
+    image: caddy:2.8
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+  frontend:
+    build:
+      context: ../../../frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_BASE: /api        # Caddy routes /api and /ws to the backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://backend:8080
+
+  backend:
+    build:
+      context: ../../../backend
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql://moveproof:${POSTGRES_PASSWORD}@db:5432/moveproof
+      SIM_BASE_URL: http://sim:8090
+      SIM_TOKEN: ${SIM_TOKEN}
+      JWT_SECRET: ${JWT_SECRET}
+      RECEIPT_SIGNING_KEY: ${RECEIPT_SIGNING_KEY}
+      CORS_ORIGINS: https://${SITE_ADDRESS}
+      API_DOCS_ENABLED: "true"
+      # Models: NVIDIA Nemotron on Nebius Token Factory
+      NEBIUS_API_KEY: ${NEBIUS_API_KEY}
+      LLM_ENABLED: "true"
+      LLM_PROVIDER: nemotron
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      # Public link: shared settings read-only, one mission at a time, budgets, auto-stop
+      PUBLIC_DEMO: "true"
+      RATE_LIMIT_REQUESTS_PER_MINUTE: "900"
+    depends_on:
+      db:
+        condition: service_healthy
+      sim:
+        condition: service_started
+
+  sim:
+    build:
+      context: ../../..
+      dockerfile: sim/warehouse_sim/Dockerfile
+    restart: always
+    environment:
+      SIM_TICK_HZ: "10"
+      SIM_SEED: "42"
+      SIM_TOKEN: ${SIM_TOKEN}
+
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: moveproof
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: moveproof
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moveproof"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pg_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,28 @@
+# Automatic HTTPS for SITE_ADDRESS (e.g. moveproof.203-0-113-5.sslip.io)
+{$SITE_ADDRESS} {
+	encode gzip
+
+	# API: strip /api and pass to the backend
+	handle_path /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# Live feed (WebSocket) and API docs go straight to the backend
+	handle /ws/* {
+		reverse_proxy backend:8080
+	}
+	handle /docs* {
+		reverse_proxy backend:8080
+	}
+	handle /openapi.json {
+		reverse_proxy backend:8080
+	}
+	handle /health {
+		reverse_proxy backend:8080
+	}
+
+	# Everything else: the dashboard
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

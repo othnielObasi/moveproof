@@ -117,6 +117,14 @@ class Settings(BaseSettings):
     def vision_configured(self) -> bool:
         return bool(self.nebius_api_key and self.vision_enabled)
 
+    # Public demo guardrails (see app/demo_guard.py). Off by default.
+    public_demo: bool = False
+    demo_max_run_s: float = 240.0             # missions stop automatically after this
+    demo_missions_per_hour: int = 20
+    demo_model_calls_per_hour: int = 30       # direct /llm/* calls
+    demo_vision_checks_per_hour: int = 60     # on-demand checks (run-loop checks are paced separately)
+    demo_site_intel_per_hour: int = 20        # Tavily lookups and bulletins
+
     # ------------------------------------------------------------
     # LLM / Agent Configuration
     # ------------------------------------------------------------

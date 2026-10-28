@@ -424,6 +424,30 @@ class RunService:
                     run = db.query(Run).filter(Run.id == run_id).first()
                     if not run or run.status not in ("running",):
                         break
+
+                    # Public demo: missions stop on their own so the shared robot frees up
+                    from app.config import settings as _cfg
+                    if _cfg.public_demo and run.started_at is not None:
+                        started = run.started_at.replace(tzinfo=None)
+                        if (utc_now().replace(tzinfo=None) - started).total_seconds() > _cfg.demo_max_run_s:
+                            try:
+                                await self.sim.send_command({"intent": "STOP", "params": {}})
+                            except Exception:
+                                pass
+                            run.status = "stopped"
+                            run.ended_at = utc_now()
+                            if mission_row := db.query(Mission).filter(Mission.id == run.mission_id).first():
+                                if mission_row.status == "executing":
+                                    mission_row.status = "paused"
+                            self._append_event(db, run_id, "INTERVENTION", {
+                                "type": "STOP", "actor": "system",
+                                "reason": f"Public demo time limit ({int(_cfg.demo_max_run_s)} s)",
+                            })
+                            db.commit()
+                            if self._ws_broadcast:
+                                await self._ws_broadcast(run_id, {"kind": "status", "data": {"status": "stopped",
+                                                         "reason": "Public demo time limit"}})
+                            break
                     mission = db.query(Mission).filter(Mission.id == run.mission_id).first()
                     goal = json.loads(mission.goal_json) if mission else {"x": 0, "y": 0}
 
