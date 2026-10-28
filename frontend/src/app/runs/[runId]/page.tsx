@@ -771,22 +771,6 @@ export default function RunPage({ params }: { params: { runId: string } }) {
           {/* ── Unified AI Mission Planner ── */}
           {!isFullscreen && (
           <Card title="🤖 AI Mission Planner">
-            {/* Pipeline stage strip */}
-            <div className="flex items-center gap-2 mb-3">
-              {([
-                { key: "idle", label: "Idle" },
-                { key: "reasoning", label: "Reasoning" },
-                { key: "planning", label: "Planning" },
-                { key: "governing", label: "Govern" },
-                { key: "ready", label: "Ready" },
-                { key: "executing", label: "Executing" },
-                { key: "done", label: "Done" },
-              ] as const).map((st) => (
-                <div key={st.key} className={`text-[11px] px-2 py-1 rounded-full border transition ${pipelineStage === st.key ? "bg-purple-500 text-white border-purple-600" : "bg-mc-panel text-mc-mute border-mc-line"}`}>
-                  {st.label}
-                </div>
-              ))}
-            </div>
             {/* Autonomous Mode + Memory + Replan badges */}
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <button onClick={() => setAutonomousMode(!autonomousMode)}
@@ -839,26 +823,6 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 );
               })}
             </div>
-
-            {/* Mission context badge */}
-            {(mission || missionInstruction) && (() => {
-              const bayGoal = resolveBayGoal(missionInstruction, world?.bays || []);
-              const activeGoal = bayGoal || mission?.goal || null;
-              return (
-                <div className="flex items-center gap-2 mb-2 text-xs text-mc-mute">
-                  {mission && (
-                    <span className="bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 px-2 py-0.5 rounded-full">
-                      Mission: {mission.title}
-                    </span>
-                  )}
-                  {activeGoal && (
-                    <span className={`border px-2 py-0.5 rounded-full ${bayGoal ? "bg-green-500/15 border-green-500/30 text-green-300" : "bg-mc-raise/50 border-mc-line2 text-mc-ink/85"}`}>
-                      {bayGoal ? "Bay Goal" : "Goal"}: ({activeGoal.x}, {activeGoal.y})
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
 
             {/* ── Auto-pilot banner: explain what's happening when backend drives the run ── */}
             {isBackendAutoPilot && (
@@ -1152,144 +1116,58 @@ export default function RunPage({ params }: { params: { runId: string } }) {
               </div>
             )}
 
-            {/* Auto-Pilot Reasoning (when backend drives the run — no manual agenticResult) */}
-            {!agenticResult && llmPlan && (
-              <div className="space-y-2 mb-3">
-                <div className="text-[10px] uppercase tracking-wide text-mc-dim font-semibold">AI Reasoning</div>
-                <div className="bg-mc-bg/60 border border-cyan-500/20 rounded-lg p-3 space-y-1.5 text-xs font-mono">
-                  <div className="flex items-start gap-2">
-                    <span className="text-purple-400 font-bold min-w-[80px]">Goal:</span>
-                    <span className="text-white truncate">{missionInstruction || mission?.title || "—"}</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-cyan-400 font-bold min-w-[80px]">Constraints:</span>
-                    <div className="text-mc-ink/85 space-y-0.5">
-                      {world?.human && <div>- Human detected @({world.human.x}, {world.human.y})</div>}
-                      {(world?.obstacles || []).slice(0, 3).map((o: any, i: number) => (
-                        <div key={i}>- Obstacle @({o.x}, {o.y})</div>
-                      ))}
-                      {world?.geofence && <div>- Geofence: [{world.geofence.min_x},{world.geofence.min_y}] → [{world.geofence.max_x},{world.geofence.max_y}]</div>}
-                      {!world?.human && !(world?.obstacles?.length) && <div>- Standard safety policies active (8 policies)</div>}
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-emerald-400 font-bold min-w-[80px]">Strategy:</span>
-                    <span className="text-mc-ink/85">{llmPlan.rationale || "Direct path with obstacle avoidance and human safety margins"}</span>
-                  </div>
-                  {/* Planner Confidence */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-yellow-400 font-bold min-w-[120px]">Planner Confidence:</span>
-                    {(() => {
-                      const risk = lastDecision?.governance?.risk_score ?? 0.15;
-                      const confidence = Math.max(0, Math.min(1, (1 - risk) * 0.92 + 0.04));
-                      const pct = (confidence * 100).toFixed(1);
-                      const color = confidence > 0.7 ? "text-green-400" : confidence > 0.4 ? "text-yellow-400" : "text-red-400";
-                      return (
-                        <>
-                          <span className={`font-bold ${color}`}>{pct}%</span>
-                          <div className="flex-1 h-1 bg-mc-raise rounded-full overflow-hidden ml-1">
-                            <div className={`h-full rounded-full transition-all duration-500 ${confidence > 0.7 ? "bg-green-500" : confidence > 0.4 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${confidence * 100}%` }} />
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                  {/* Governance Risk */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-red-400 font-bold min-w-[120px]">Governance Risk:</span>
-                    {(() => {
-                      const risk = lastDecision?.governance?.risk_score ?? 0.15;
-                      const pct = (risk * 100).toFixed(1);
-                      const color = risk > 0.5 ? "text-red-400" : risk > 0.2 ? "text-yellow-400" : "text-green-400";
-                      return (
-                        <>
-                          <span className={`font-bold ${color}`}>{pct}%</span>
-                          <div className="flex-1 h-1 bg-mc-raise rounded-full overflow-hidden ml-1">
-                            <div className={`h-full rounded-full transition-all duration-500 ${risk > 0.5 ? "bg-red-500" : risk > 0.2 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${risk * 100}%` }} />
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <div className="text-[10px] text-mc-dim italic">High planner confidence ≠ safe execution — governance overrides unsafe plans regardless of confidence</div>
-                </div>
-
-                {/* MoveProof Checks from MISSION_REVIEW */}
-                {missionReview && missionReview.verdict === "APPROVED" && (
-                  <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-2.5 space-y-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-green-400 font-semibold text-[10px] uppercase tracking-wider">MoveProof Checks Passed</span>
-                      <span className="text-[10px] text-green-400/60 font-mono">{missionReview.checks_passed?.length || 0} checks · {missionReview.waypoint_count || 0} waypoints</span>
-                    </div>
-                    {(missionReview.checks_passed || []).map((check: string, i: number) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <span className="text-green-500 text-[10px]">✓</span>
-                        <span className="text-green-300/80 text-[10px] font-mono">{check.replace(/_/g, " ")}</span>
-                      </div>
-                    ))}
-                    {telemetry && (
-                      <div className="text-[10px] text-green-400/70 space-y-0.5 pt-1 border-t border-green-500/10 mt-1">
-                        {telemetry.human_distance_m > 3 && <div>✓ Human distance: {telemetry.human_distance_m?.toFixed(1)}m &gt; 3m safe threshold</div>}
-                        {telemetry.nearest_obstacle_m > 0.5 && <div>✓ Obstacle clearance: {telemetry.nearest_obstacle_m?.toFixed(1)}m &gt; 0.5m minimum</div>}
-                        <div>✓ Position within geofence bounds</div>
-                      </div>
+            {/* Planner's reasoning (backend-driven runs): one readable summary, details on demand */}
+            {!agenticResult && llmPlan && (() => {
+              const raw = String(llmPlan.rationale || "");
+              const m = raw.match(/^\[([^\]]+)\]\s*/);
+              const model = (m ? m[1] : llmPlan.model || "").replace(/^nvidia\//, "");
+              const strategy = raw.replace(/^\[[^\]]+\]\s*/, "") || "Route along the aisles to the destination.";
+              return (
+                <div className="mb-3 rounded-lg border border-mc-line bg-mc-raise/60 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] uppercase tracking-wider text-mc-dim font-semibold">Planner&apos;s reasoning</span>
+                    {model && <span className="text-[11px] font-medium text-mc-nv">{model}</span>}
+                    {missionReview?.verdict === "APPROVED" && (
+                      <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full border border-mc-ok/30 bg-mc-ok/10 text-mc-ok">
+                        Plan review passed · {missionReview.checks_passed?.length || 0} checks
+                      </span>
+                    )}
+                    {missionReview?.verdict === "BLOCKED" && (
+                      <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full border border-mc-stop/30 bg-mc-stop/10 text-mc-stop">Plan blocked</span>
                     )}
                   </div>
-                )}
-                {missionReview && missionReview.verdict === "BLOCKED" && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 space-y-1">
-                    <div className="text-red-400 font-semibold text-[10px] uppercase tracking-wider">MoveProof Blocked</div>
-                    {(missionReview.reasons || []).map((r: string, i: number) => (
-                      <div key={i} className="text-[10px] text-red-300">• {r}</div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Model info */}
-                {llmPlan.model && <div className="text-[10px] text-mc-dim font-mono">Model: {llmPlan.model}</div>}
-              </div>
-            )}
+                  <p className={`mt-1.5 text-sm text-mc-ink/90 leading-relaxed ${showReasoningDetails ? "" : "line-clamp-2"}`}>{strategy}</p>
+                  {missionReview?.verdict === "BLOCKED" && (missionReview.reasons || []).map((r: string, i: number) => (
+                    <div key={i} className="text-xs text-mc-stop mt-1">{r}</div>
+                  ))}
+                  <button onClick={() => setShowReasoningDetails(!showReasoningDetails)} className="mt-1.5 text-xs text-mc-accent hover:underline">
+                    {showReasoningDetails ? "Hide details" : "Show details"}
+                  </button>
+                  {showReasoningDetails && (
+                    <div className="mt-2 pt-2 border-t border-mc-line/70 grid sm:grid-cols-2 gap-3 text-xs text-mc-mute">
+                      <div>
+                        <div className="text-mc-dim uppercase tracking-wider text-[10px] mb-1">What the planner saw</div>
+                        {world?.human && <div>Person at ({world.human.x}, {world.human.y})</div>}
+                        {(world?.obstacles || []).slice(0, 3).map((o: any, i: number) => <div key={i}>Obstacle at ({o.x}, {o.y})</div>)}
+                        {world?.geofence && <div>Site {world.geofence.max_x} × {world.geofence.max_y} m</div>}
+                      </div>
+                      <div>
+                        <div className="text-mc-dim uppercase tracking-wider text-[10px] mb-1">Plan review</div>
+                        {(missionReview?.checks_passed || []).map((c: string, i: number) => <div key={i}>✓ {c.replace(/_/g, " ")}</div>)}
+                        {!missionReview && <div>Waiting for the review…</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Stage 2 result: Waypoint Plan */}
             {llmPlan && (
               <div className="space-y-2 mb-3">
-                <div className="text-[10px] uppercase tracking-wide text-mc-dim font-semibold">Waypoint Plan</div>
-                {/* Planner → Governance → Execution alignment strip */}
-                <div className="grid grid-cols-3 gap-1.5 bg-mc-bg/50 border border-mc-line/50 rounded-lg p-2">
-                  <div className="flex flex-col items-center text-center">
-                    <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Planner Output</span>
-                    <span className={`text-[11px] font-bold ${llmPlan.all_approved === true ? "text-green-400" : llmPlan.all_approved === false ? "text-yellow-400" : missionReview?.verdict === "APPROVED" ? "text-green-400" : "text-mc-mute"}`}>
-                      {llmPlan.all_approved === true ? "Clean" : llmPlan.all_approved === false ? "Flagged" : missionReview?.verdict === "APPROVED" ? "Verified ✓" : "Pending"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-center text-center border-x border-mc-line/50">
-                    <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Governance Result</span>
-                    <span className={`text-[11px] font-bold ${llmPlan.all_approved === false ? "text-cyan-400" : "text-green-400"}`}>
-                      {llmPlan.all_approved === false ? "Approved with Constraints" : missionReview?.verdict === "APPROVED" ? "MoveProof Approved" : "Approved"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-center text-center">
-                    <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Execution Mode</span>
-                    <span className={`text-[11px] font-bold ${
-                      pipelineStage === "executing" ? "text-purple-400" :
-                      pipelineStage === "done" ? "text-green-400" :
-                      safety.state === "STOP" ? "text-red-400" :
-                      safety.state === "SLOW" ? "text-yellow-400" : "text-mc-mute"
-                    }`}>
-                      {pipelineStage === "executing" ? "Executing" :
-                       pipelineStage === "done" ? "Completed" :
-                       safety.state === "STOP" ? "Halted" :
-                       safety.state === "SLOW" ? "Speed Limited" :
-                       currentStatus === "running" ? "Safe Path Active" : "Pending"}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${llmPlan.all_approved === false ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
-                    {llmPlan.all_approved === true ? "All Approved" : llmPlan.all_approved === false ? "Flagged" : missionReview?.verdict === "APPROVED" ? "MoveProof Approved" : "Under Review"}
-                  </span>
-                  <span className="text-[10px] text-mc-dim">{llmPlan.waypoints?.length || 0} waypoints</span>
-                  <span className="text-[10px] text-purple-400">{llmPlan.rationale}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] uppercase tracking-wider text-mc-dim font-semibold">Waypoint plan</span>
+                  <span className="text-[11px] text-mc-dim">{llmPlan.waypoints?.length || 0} waypoints · hover one to find it on the map</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {(llmPlan.waypoints || []).map((wp: any, i: number) => {

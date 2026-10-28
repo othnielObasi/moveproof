@@ -18,10 +18,10 @@ const STEPS = [
 ];
 
 const UNTRUSTED = [
-  { title: "Model plans", text: "Nemotron proposes; the gate judges every move. Plans that cut through racking are re-routed along the aisles." },
-  { title: "Vision", text: "Nemotron 3.5 Super VL reads the robot camera. It is cross-checked with the sensors; a sighting they can't confirm can only slow the robot." },
-  { title: "The web", text: "Tavily hazard guidance passes a firewall and a two-source rule. Zones can only tighten; the gate never reads the text." },
-  { title: "Learning", text: "Lessons come only from the gate's own records and change what the planner proposes, never what the gate allows." },
+  { title: "Model plans", text: "Only proposals; every move is judged." },
+  { title: "Vision", text: "Cross-checked; can only slow the robot." },
+  { title: "The web", text: "Screened; can only tighten hazard zones." },
+  { title: "Lessons", text: "From the gate only; never change the rules." },
 ];
 
 export default function OverviewPage() {
@@ -120,11 +120,11 @@ export default function OverviewPage() {
           <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-mc-dim mb-3">It learns, and it stays on task</h2>
           <div className="grid lg:grid-cols-2 gap-4">
             <Panel title="Adaptive learning" subtitle="The planner learns from the gate. The gate never drifts.">
-              <ol className="space-y-2 text-sm text-mc-mute mb-4">
-                <li><span className="text-mc-ink font-medium">Every denial is remembered</span> by place and policy: &ldquo;near (3, 3) in the aisle, people are often here: approach slowly.&rdquo;</li>
-                <li><span className="text-mc-ink font-medium">Before planning,</span> lessons near the route go to <span className="text-mc-nv">Nemotron Ultra</span> as advice; the plan records which it used.</li>
-                <li><span className="text-mc-ink font-medium">Only the gate&apos;s own records teach.</span> A model, a camera or a web page can&apos;t write a lesson, and lessons never change the rules.</li>
-              </ol>
+              <ul className="space-y-1.5 text-sm text-mc-mute mb-4">
+                <li><span className="text-mc-ink">Denials become lessons</span>, by place and policy.</li>
+                <li><span className="text-mc-ink">Lessons near the route</span> go to <span className="text-mc-nv">Nemotron Ultra</span> before it plans.</li>
+                <li><span className="text-mc-ink">Only the gate teaches</span>; lessons never change the rules.</li>
+              </ul>
               <div className="grid grid-cols-3 gap-2">
                 <MiniStat label="Lessons learned" value={learning?.lessons} />
                 <MiniStat label="Plans shaped by lessons" value={learning?.plans_with_lessons} />
@@ -134,11 +134,11 @@ export default function OverviewPage() {
               </div>
             </Panel>
             <Panel title="Task-drift control" subtitle="Every plan and replan is checked before the robot uses it.">
-              <ol className="space-y-2 text-sm text-mc-mute mb-4">
-                <li><span className="text-mc-ink font-medium">Ends at the mission&apos;s destination,</span> taken from the mission record, never from the model.</li>
-                <li><span className="text-mc-ink font-medium">Stays inside the site and doesn&apos;t wander:</span> at most twice the aisle route, enough to detour round a person, not to roam.</li>
-                <li><span className="text-mc-ink font-medium">A plan that fails isn&apos;t used.</span> The robot takes the aisle route to the same destination, and the check is signed into the audit chain.</li>
-              </ol>
+              <ul className="space-y-1.5 text-sm text-mc-mute mb-4">
+                <li><span className="text-mc-ink">Must end at the mission&apos;s destination</span>, never one the model picks.</li>
+                <li><span className="text-mc-ink">No wandering</span>: at most twice the aisle route.</li>
+                <li><span className="text-mc-ink">A failing plan isn&apos;t used</span>; the aisle route is taken instead.</li>
+              </ul>
               <div className="grid grid-cols-3 gap-2">
                 <MiniStat label="Plans checked" value={learning?.task_checks} />
                 <MiniStat label="Drift caught" value={learning?.drift_caught} tone={learning?.drift_caught ? "warn" : "ok"} />
@@ -152,14 +152,14 @@ export default function OverviewPage() {
           </div>
         </section>
 
-        <section className="grid lg:grid-cols-3 gap-4 mb-10">
+        <section className="grid lg:grid-cols-3 gap-4 mb-10 lg:items-start">
           {/* ── Untrusted by default ─────────────────────────────────── */}
           <Panel title="Untrusted by default" subtitle="Every outside input can add caution. None can remove it." className="lg:col-span-2">
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
               {UNTRUSTED.map((u) => (
-                <div key={u.title} className="rounded-lg border border-mc-line bg-mc-raise/60 p-3">
-                  <div className="text-sm font-semibold">{u.title}</div>
-                  <p className="mt-1 text-xs text-mc-mute leading-relaxed">{u.text}</p>
+                <div key={u.title} className="flex gap-2.5">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-mc-accent shrink-0" />
+                  <div><div className="text-sm font-semibold">{u.title}</div><p className="text-xs text-mc-mute">{u.text}</p></div>
                 </div>
               ))}
             </div>

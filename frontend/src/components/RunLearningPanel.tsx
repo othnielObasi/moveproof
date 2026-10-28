@@ -46,11 +46,7 @@ export function RunLearningPanel({ runId, events, ended }: { runId: string; even
           <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em]">Task focus</h3>
           {checks.length > 0 && <Pill tone={drifts ? "warn" : "ok"} dot>{drifts ? `${drifts} drift caught` : "On task"}</Pill>}
         </div>
-        <p className="text-xs text-mc-mute mb-3 leading-relaxed">
-          Every plan and replan is checked before the robot uses it: it must end at the mission&apos;s destination (from the
-          mission record, never the model), stay inside the site and not wander. A plan that fails is replaced by the
-          aisle route to the same destination.
-        </p>
+        <p className="text-xs text-mc-mute mb-3">Each plan must end at the mission&apos;s destination without wandering, or the aisle route is used.</p>
         {checks.length === 0 ? <div className="text-xs text-mc-dim">No plan checked yet.</div> : (
           <ul className="space-y-2">
             {checks.map(({ e, p }, i) => (
