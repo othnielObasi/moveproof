@@ -19,6 +19,8 @@ For the Nebius × NVIDIA Global AI Hackathon, Physical AI track. The rules: 3 mi
 | **2:05–2:35** | **Evidence** → the Nemotron benchmark card (Nebius Serverless Job badge, 400 → 0). Then *Receipts & chain*: click **Verify signature**. | "We measured it. On Nebius Serverless Jobs we ran seeded warehouse missions with Nemotron planning: without the gate, 400 unsafe moves executed, including moves into people. With the gate: zero. And with lessons from the gate, Nemotron proposed 37 percent fewer unsafe moves. Every decision has a signed receipt anyone can verify." |
 | **2:35–2:55** | Back to the Overview *It learns, and it stays on task* section, then the footer / GitHub repo. | "MoveProof: Nemotron on Nebius Token Factory proposes, the gate decides, the robot stays on task and learns, and the proof is signed. Running on Nebius AI Cloud. The code is open source on GitHub." |
 
+**A real catch for the 1:45 shot (optional):** open Runs → `run_4ead731ee738` → *Learning & task*. A live Nemotron replan was 28 m long when the aisle route was 5 m; the task guard rejected it and sent the robot the short way. You can use it alongside, or instead of, the planted example.
+
 **Key-modules minute:** 0:35–1:45 is continuous live footage of the application modules (planning, the gate, replanning, hazards, Tavily screening, vision), which covers the 1-minute requirement for projects without hardware.
 
 **If something goes wrong on camera**

@@ -45,6 +45,8 @@ Each item can be checked in the running app or with one API call. Replace `{run_
   - Every mission plan and replan is checked before use: ends within 1.5 m of the mission destination (from the mission record, never the model), stays inside the site, at most 2× the aisle route + 8 m.
   - A failing plan is replaced by the aisle route to the same destination; each check is a `TASK_CHECK` event in the hash chain.
   - Visible on the run page (**Learning & task** → Task focus), the Overview (plans checked, drift caught) and `GET /evidence/learning`.
+  - Try it: Governance → **Test a move or plan** → *Wrong destination* → **Run the task guard** (no side effects; `POST /plans/check`).
+  - A real catch on the live demo: run `run_4ead731ee738`, where a Nemotron replan 28 m long (aisle route 5 m) was replaced.
 
 - [ ] **Governed rule changes**
   - `GET /policies/active` shows rules in force, changeable thresholds with bounds, and fixed safety floors.
