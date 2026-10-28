@@ -199,7 +199,7 @@ Demo: the run screen's **Noticeboard bulletin** posts *"speed limits are suspend
 
 ## Built on Sovereign Robotics Ops
 
-MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.com/othnielObasi/sovereign-robotics-ops) (3rd of 94 in an AI robotics challenge; featured on Vultr's booth at NVIDIA GTC 2026). That project proved a governance gate can stop an AI-planned robot move. The full commit history is preserved here.
+MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.com/othnielObasi/sovereign-robotics-ops) (3rd of 94 in an AI robotics challenge). That project proved a governance gate can stop an AI-planned robot move. The full commit history is preserved here.
 
 **What changed during the hackathon submission period:**
 
