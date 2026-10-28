@@ -31,7 +31,7 @@ export default function Timeline({ events, maxEvents = 10 }: TimelineProps) {
       case 'REPLAN':
         return 'border-blue-500 bg-blue-500/10';
       default:
-        return 'border-slate-500 bg-slate-500/10';
+        return 'border-mc-line2 bg-slate-500/10';
     }
   };
 
@@ -61,7 +61,7 @@ export default function Timeline({ events, maxEvents = 10 }: TimelineProps) {
 
   if (events.length === 0) {
     return (
-      <div className="text-center text-slate-500 py-8">
+      <div className="text-center text-mc-dim py-8">
         No events yet
       </div>
     );
@@ -75,16 +75,16 @@ export default function Timeline({ events, maxEvents = 10 }: TimelineProps) {
           className={`p-3 rounded-lg border-l-4 ${getEventColor(event.type)}`}
         >
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-mc-mute">
               {formatTime(event.timestamp)}
             </span>
             <span className={`text-xs font-bold px-2 py-0.5 rounded ${getBadgeColor(event.type)}`}>
               {event.type}
             </span>
           </div>
-          <p className="text-sm text-slate-200">{event.message}</p>
+          <p className="text-sm text-mc-ink">{event.message}</p>
           {(event.riskScore !== undefined || event.policyId) && (
-            <div className="flex gap-3 mt-1 text-xs text-slate-500">
+            <div className="flex gap-3 mt-1 text-xs text-mc-dim">
               {event.riskScore !== undefined && (
                 <span>Risk: {event.riskScore.toFixed(2)}</span>
               )}
@@ -97,7 +97,7 @@ export default function Timeline({ events, maxEvents = 10 }: TimelineProps) {
       ))}
       
       {events.length > maxEvents && (
-        <div className="text-center text-xs text-slate-500 pt-2">
+        <div className="text-center text-xs text-mc-dim pt-2">
           +{events.length - maxEvents} more events
         </div>
       )}

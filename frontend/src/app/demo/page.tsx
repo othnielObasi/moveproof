@@ -132,14 +132,14 @@ export default function MoveProofDashboard() {
   }, [wsConnected, scenario, waypointIndex, arrived, robotPos])
 
   return (
-    <div className="min-h-screen p-4 bg-slate-900 text-white">
+    <div className="min-h-screen p-4 bg-mc-bg text-white">
       <div className="max-w-7xl mx-auto grid grid-cols-12 gap-4">
-        <div className="col-span-8 bg-slate-800 rounded-md p-4">
+        <div className="col-span-8 bg-mc-panel rounded-md p-4">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold">Demo — shared warehouse view</h2>
             <div className="space-x-2">
               {scenarios.map((s, i) => (
-                <button key={s.name} onClick={() => handleScenarioChange(i)} className={`px-3 py-1 rounded ${i === activeScenario ? 'bg-emerald-500 text-black' : 'bg-slate-700'}`}>
+                <button key={s.name} onClick={() => handleScenarioChange(i)} className={`px-3 py-1 rounded ${i === activeScenario ? 'bg-emerald-500 text-black' : 'bg-mc-raise'}`}>
                   {s.name}
                 </button>
               ))}
@@ -147,7 +147,7 @@ export default function MoveProofDashboard() {
           </div>
 
           <div className="mb-3 flex flex-wrap gap-3 text-xs">
-            {(['3d', '2d'] as const).map(view => <button key={view} aria-pressed={mapView === view} onClick={() => setMapView(view)} className={`rounded px-3 py-1 ${mapView === view ? 'bg-cyan-400 text-slate-950' : 'bg-slate-700'}`}>{view === '3d' ? '3D warehouse' : 'Floor plan'}</button>)}
+            {(['3d', '2d'] as const).map(view => <button key={view} aria-pressed={mapView === view} onClick={() => setMapView(view)} className={`rounded px-3 py-1 ${mapView === view ? 'bg-cyan-400 text-slate-950' : 'bg-mc-raise'}`}>{view === '3d' ? '3D warehouse' : 'Floor plan'}</button>)}
             <label><input type="checkbox" checked={showHeatmap} onChange={e => setShowHeatmap(e.target.checked)} /> Heatmap</label>
             <label><input type="checkbox" checked={showTrail} onChange={e => setShowTrail(e.target.checked)} /> Trail</label>
             {demoPathPoints.map((point, i) => <button key={i} onMouseEnter={() => setHoveredWaypoint(i)} onMouseLeave={() => setHoveredWaypoint(null)} onFocus={() => setHoveredWaypoint(i)} onBlur={() => setHoveredWaypoint(null)} className="rounded border border-purple-600 px-2">Waypoint {i + 1}</button>)}
@@ -161,39 +161,39 @@ export default function MoveProofDashboard() {
         </div>
 
         <div className="col-span-4 space-y-4">
-          <div className="bg-slate-800 rounded-md p-4">
+          <div className="bg-mc-panel rounded-md p-4">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <div className="text-sm text-slate-300">Status</div>
+                <div className="text-sm text-mc-ink/85">Status</div>
                 <div className="text-2xl font-bold">{scenario.status === 'STOP' ? 'STOP' : scenario.status === 'SLOW' ? 'SLOW' : 'SAFE'}</div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-slate-400">Risk</div>
+                <div className="text-xs text-mc-mute">Risk</div>
                 <div className="font-mono text-lg">{scenario.risk}</div>
               </div>
             </div>
 
-            <div className="flex justify-between text-sm text-slate-300">
+            <div className="flex justify-between text-sm text-mc-ink/85">
               <div>Msgs/s: {messagesPerSec}</div>
               <div>Latency: {latency}ms</div>
             </div>
           </div>
 
-          <div className="bg-slate-800 rounded-md p-4 overflow-auto" style={{ maxHeight: 300 }}>
+          <div className="bg-mc-panel rounded-md p-4 overflow-auto" style={{ maxHeight: 300 }}>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-slate-300">API/Decision</div>
-              <button className="text-xs text-slate-400" onClick={() => setShowApiPanel((v) => !v)}>{showApiPanel ? 'Hide' : 'Show'}</button>
+              <div className="text-sm text-mc-ink/85">API/Decision</div>
+              <button className="text-xs text-mc-mute" onClick={() => setShowApiPanel((v) => !v)}>{showApiPanel ? 'Hide' : 'Show'}</button>
             </div>
             {showApiPanel && (
-              <pre className="text-xs bg-slate-900 p-2 rounded text-slate-200 overflow-auto">{apiResponse ? JSON.stringify(apiResponse, null, 2) : 'No data yet'}</pre>
+              <pre className="text-xs bg-mc-bg p-2 rounded text-mc-ink overflow-auto">{apiResponse ? JSON.stringify(apiResponse, null, 2) : 'No data yet'}</pre>
             )}
           </div>
 
-          <div className="bg-slate-800 rounded-md p-4">
-            <div className="text-sm text-slate-300">Events</div>
+          <div className="bg-mc-panel rounded-md p-4">
+            <div className="text-sm text-mc-ink/85">Events</div>
             <ul className="mt-2 text-xs space-y-1">
               {events.map((e) => (
-                <li key={e.id} className="text-slate-200">[{e.time}] {e.type} — {e.message}</li>
+                <li key={e.id} className="text-mc-ink">[{e.time}] {e.type} — {e.message}</li>
               ))}
             </ul>
           </div>

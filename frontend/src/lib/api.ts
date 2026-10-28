@@ -504,3 +504,23 @@ export async function runPerceptionCheck() {
   if (!r.ok) throw new Error(await parseErrorResponse(r, "Vision check failed"));
   return r.json();
 }
+
+/* ── Evidence, governance history, learning, receipts ─────────────────────── */
+
+async function getJson(path: string, what: string) {
+  const r = await fetchWithRetry(`${API_BASE}${path}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(await parseErrorResponse(r, `Failed to load ${what}`));
+  return r.json();
+}
+
+export const getBenchmarks = () => getJson("/evidence/benchmarks", "benchmark results");
+export const getActivePolicies = () => getJson("/policies/active", "active rules");
+export const getPolicyActivations = () => getJson("/policies/activations", "rule activations");
+export const getPolicyProposals = () => getJson("/policies/proposals", "rule proposals");
+export const getLessons = () => getJson("/agent/lessons", "planner lessons");
+export const getSigningKey = () => getJson("/governance/signing-key", "signing key");
+export const getReceipts = (runId: string) => getJson(`/governance/receipts/${runId}`, "receipts");
+export const verifyReceipt = (runId: string, id: string) => getJson(`/governance/receipts/${runId}/${id}/verify`, "receipt check");
+export const getDecisionStats = (runId: string) => getJson(`/governance/decisions/${runId}/stats`, "decision stats");
+export const getLlmUsage = () => getJson("/llm/usage", "model usage");
+export const getLlmModels = () => getJson("/llm/models", "model tiers");

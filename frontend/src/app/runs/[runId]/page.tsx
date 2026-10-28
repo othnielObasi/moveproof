@@ -10,6 +10,7 @@ import { IntrospectionPanel } from "@/components/IntrospectionPanel";
 import { wsUrlForRun } from "@/lib/ws";
 import type { WsMessage } from "@/lib/types";
 import Link from "next/link";
+import { Tabs } from "@/components/ui";
 
 /* ── Bay resolver (matches backend resolve_bay_from_instruction) ── */
 const BAY_PATTERN = /\b([ABSR])-?(\d{1,2})\b/i;
@@ -25,10 +26,13 @@ function resolveBayGoal(instruction: string, bays: any[]): { x: number; y: numbe
   return null;
 }
 
+// Strip decorative emoji from panel titles: the mission-control style keeps titles plain
+const plain = (t: string) => t.replace(/^[^\p{L}\p{N}]+/u, "").trim();
+
 function Card({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 shadow-lg shadow-black/20 ${className}`}>
-      <div className="font-bold text-sm text-slate-300 uppercase tracking-wide mb-3">{title}</div>
+    <div className={`bg-mc-panel border border-mc-line rounded-xl p-4 ${className}`}>
+      <div className="text-[13px] font-semibold uppercase tracking-[0.08em] text-mc-ink mb-3">{plain(title)}</div>
       {children}
     </div>
   );
@@ -37,12 +41,12 @@ function Card({ title, children, className = "" }: { title: string; children: Re
 function CollapsibleCard({ title, children, className = "", defaultOpen = false, hint }: { title: string; children: React.ReactNode; className?: string; defaultOpen?: boolean; hint?: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={`bg-slate-800/80 border border-slate-700/60 rounded-xl shadow-lg shadow-black/20 ${className}`}>
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-4 text-left gap-2">
-        <span className="font-bold text-sm text-slate-300 uppercase tracking-wide">{title}</span>
+    <div className={`bg-mc-panel border border-mc-line rounded-xl ${className}`}>
+      <button onClick={() => setOpen(!open)} aria-expanded={open} className="w-full flex items-center justify-between p-4 text-left gap-2">
+        <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-mc-ink">{plain(title)}</span>
         <span className="flex items-center gap-2">
-          {!open && hint && <span className="text-[10px] text-slate-500 font-normal normal-case tracking-normal">{hint}</span>}
-          <span className={`text-slate-500 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+          {!open && hint && <span className="text-[10px] text-mc-dim font-normal normal-case tracking-normal">{hint}</span>}
+          <span className={`text-mc-dim transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
         </span>
       </button>
       {open && <div className="px-4 pb-4">{children}</div>}
@@ -51,15 +55,16 @@ function CollapsibleCard({ title, children, className = "", defaultOpen = false,
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const s = status.toLowerCase();
-  const color = s === "running" ? "bg-green-500/20 text-green-400 border-green-500/30"
-    : s === "planning" ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
-    : s === "stopped" ? "bg-red-500/20 text-red-400 border-red-500/30"
-    : s === "completed" ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/30"
-    : "bg-slate-700 text-slate-400 border-slate-600";
+  const s = (status || "").toLowerCase();
+  const color = s === "running" ? "bg-mc-accent/10 text-mc-accent border-mc-accent/30"
+    : s === "planning" ? "bg-mc-info/10 text-mc-info border-mc-info/30"
+    : s === "stopped" || s === "failed" ? "bg-mc-stop/10 text-mc-stop border-mc-stop/30"
+    : s === "completed" ? "bg-mc-ok/10 text-mc-ok border-mc-ok/30"
+    : s === "paused" ? "bg-mc-warn/10 text-mc-warn border-mc-warn/30"
+    : "bg-mc-raise text-mc-mute border-mc-line2";
   return (
-    <span className={`text-xs font-medium px-3 py-1 rounded-full border ${color}`}>
-      {s === "planning" ? "🗺️ Planning…" : status || "—"}
+    <span className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${color}`}>
+      {s === "planning" ? "Planning…" : status || "—"}
     </span>
   );
 }
@@ -86,6 +91,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
   const [telemetry, setTelemetry] = useState<any>(null);
   const [world, setWorld] = useState<any>(null);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
+  const [sideTab, setSideTab] = useState<string>("intel");
   const [mapView, setMapView] = useState<"3d" | "2d">("3d");
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("view") === "2d") setMapView("2d");
@@ -564,33 +570,37 @@ export default function RunPage({ params }: { params: { runId: string } }) {
     <div className="max-w-[1400px] mx-auto px-4 py-4 space-y-3">
       {/* Scenario toast notification (floating) */}
       {scenarioToast && (
-        <div className="fixed top-20 right-4 z-50 bg-slate-800/95 border border-cyan-500/40 rounded-xl px-4 py-3 shadow-lg shadow-black/30 backdrop-blur animate-slide-in max-w-xs">
+        <div className="fixed top-20 right-4 z-50 bg-mc-panel/95 border border-cyan-500/40 rounded-xl px-4 py-3 shadow-lg shadow-black/30 backdrop-blur animate-slide-in max-w-xs">
           <div className="text-sm text-cyan-300 font-medium">{scenarioToast}</div>
         </div>
       )}
 
       {/* ── Compact Header ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/runs" className="text-slate-500 hover:text-cyan-400 transition text-sm">← Runs</Link>
-          <h1 className="text-lg font-bold text-white">
-            <span className="text-cyan-400 font-mono">{runId.slice(0, 12)}</span>
-          </h1>
-          <StatusBadge status={currentStatus} />
-          <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border ${
-            wsConnected ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"
-          }`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${wsConnected ? "bg-green-400" : "bg-red-400 animate-pulse"}`} />
-            {wsConnected ? "Live" : "Offline"}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs text-mc-dim">
+            <Link href="/runs" className="hover:text-mc-accent">Runs</Link>
+            <span>/</span>
+            <span className="font-mono text-mc-accent">{runId}</span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2.5">
+            <h1 className="text-xl font-semibold tracking-tight text-mc-ink truncate max-w-[60vw]" title={mission?.title || runId}>
+              {mission?.title || "Governed run"}
+            </h1>
+            <StatusBadge status={currentStatus} />
+            <div className={`flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+              wsConnected ? "bg-mc-ok/10 text-mc-ok border-mc-ok/30" : "bg-mc-stop/10 text-mc-stop border-mc-stop/30"
+            }`}>
+              <div className={`w-1.5 h-1.5 rounded-full bg-current ${wsConnected ? "animate-live-dot" : ""}`} />
+              {wsConnected ? "Live" : "Offline"}
+            </div>
+            {mission?.goal && <span className="text-xs text-mc-dim">goal ({mission.goal.x}, {mission.goal.y})</span>}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {run?.mission_id && <span className="text-xs text-slate-500 font-mono">{run.mission_id}</span>}
-          {mission?.title && <span className="text-xs text-cyan-400 font-medium truncate max-w-[200px]" title={mission.title}>{mission.title}</span>}
-          {mission?.goal && <span className="text-[10px] text-slate-500">→ ({mission.goal.x}, {mission.goal.y})</span>}
-          {currentStatus !== "stopped" && (
-            <button onClick={onStop} className="bg-red-500/80 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
-              Stop
+        <div className="flex items-center gap-2 flex-wrap">
+          {currentStatus !== "stopped" && currentStatus !== "completed" && (
+            <button onClick={onStop} className="bg-mc-stop hover:bg-red-400 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition">
+              Stop robot
             </button>
           )}
           {currentStatus === "paused" && (
@@ -604,8 +614,8 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             </button>
           )}
           {/* Live diagnostics */}
-          <div className="text-xs text-slate-400 ml-3 flex items-center gap-3">
-            {executionReason && <span className="px-2 py-0.5 rounded bg-slate-700">{executionReason}</span>}
+          <div className="text-xs text-mc-mute ml-3 flex items-center gap-3">
+            {executionReason && <span className="px-2 py-0.5 rounded bg-mc-raise">{executionReason}</span>}
             {distanceToGoalLive !== null && <span>Goal: {distanceToGoalLive.toFixed(2)}m</span>}
             {stagnantCyclesLive > 0 && <span className="text-yellow-300">Stag: {stagnantCyclesLive}</span>}
           </div>
@@ -616,18 +626,18 @@ export default function RunPage({ params }: { params: { runId: string } }) {
       <div className={`sticky top-0 z-20 backdrop-blur-md grid grid-cols-5 gap-1.5 px-3 py-2 rounded-lg border ${safetyBannerCls[safety.state] || safetyBannerCls.OK}`}>
         {/* Mission Status */}
         <div className="flex flex-col items-center text-center">
-          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Mission</span>
+          <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Mission</span>
           <span className={`text-xs font-bold ${currentStatus === "stopped" ? "text-red-400" : currentStatus === "paused" ? "text-yellow-400" : currentStatus === "planning" ? "text-purple-400" : "text-green-400"}`}>
             {currentStatus === "running" ? "Active" : currentStatus === "stopped" ? "Halted" : currentStatus === "paused" ? "Paused" : currentStatus === "completed" ? "Complete" : currentStatus === "planning" ? "Planning…" : "Idle"}
           </span>
         </div>
         {/* Current Action Verdict */}
         <div className="flex flex-col items-center text-center">
-          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Action Verdict</span>
+          <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Action Verdict</span>
           <span className={`text-xs font-bold ${
             lastDecision?.governance?.decision === "APPROVED" ? "text-green-400" :
             lastDecision?.governance?.decision === "DENIED" ? "text-red-400" :
-            lastDecision?.governance?.decision === "NEEDS_REVIEW" ? "text-yellow-400" : "text-slate-400"
+            lastDecision?.governance?.decision === "NEEDS_REVIEW" ? "text-yellow-400" : "text-mc-mute"
           }`}>
             {lastDecision?.governance?.decision === "APPROVED"
               ? (lastDecision?.proposal?.intent === "STOP" ? "Approved Stop" : "Approved")
@@ -636,7 +646,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
         </div>
         {/* Environment Risk State */}
         <div className="flex flex-col items-center text-center">
-          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Environment</span>
+          <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Environment</span>
           <span className={`text-xs font-bold ${
             telemetry?.human_distance_m != null && telemetry.human_distance_m < 2 ? "text-red-400" :
             telemetry?.human_distance_m != null && telemetry.human_distance_m < 4 ? "text-yellow-400" : "text-green-400"
@@ -648,12 +658,12 @@ export default function RunPage({ params }: { params: { runId: string } }) {
         </div>
         {/* Planner State */}
         <div className="flex flex-col items-center text-center">
-          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Planner</span>
+          <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Planner</span>
           <span className={`text-xs font-bold ${
             llmPlan?.all_approved === true ? "text-green-400" :
             llmPlan?.all_approved === false ? "text-yellow-400" :
             llmPlan && missionReview?.verdict === "APPROVED" ? "text-green-400" :
-            pipelineStage === "reasoning" || pipelineStage === "planning" ? "text-purple-400" : "text-slate-400"
+            pipelineStage === "reasoning" || pipelineStage === "planning" ? "text-purple-400" : "text-mc-mute"
           }`}>
             {llmPlan?.all_approved === true ? "All Approved" :
              llmPlan?.all_approved === false ? "Constrained" :
@@ -664,7 +674,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
         </div>
         {/* Execution Safety */}
         <div className="flex flex-col items-center text-center">
-          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Execution</span>
+          <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Execution</span>
           <span className={`text-xs font-bold ${
             safety.state === "OK" ? "text-green-400" :
             safety.state === "STOP" ? "text-red-400" :
@@ -678,18 +688,18 @@ export default function RunPage({ params }: { params: { runId: string } }) {
       </div>
 
       {/* ── MAIN LAYOUT: Hero Map (left 60%) + Sidebar (right 40%) ── */}
-      <div ref={fullscreenGridRef} className={`grid grid-cols-1 lg:grid-cols-5 gap-3 [&:fullscreen]:bg-slate-900 [&:fullscreen]:p-4 [&:fullscreen]:overflow-y-auto`}>
+      <div ref={fullscreenGridRef} className={`grid grid-cols-1 lg:grid-cols-5 gap-3 [&:fullscreen]:bg-mc-bg [&:fullscreen]:p-4 [&:fullscreen]:overflow-y-auto`}>
 
         {/* ── LEFT: Hero Map ── */}
         <div className="lg:col-span-3 space-y-3">
           <Card title="Warehouse Simulation">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-3">
-                <label className="text-[10px] text-slate-400 flex items-center gap-1 cursor-pointer">
+                <label className="text-[10px] text-mc-mute flex items-center gap-1 cursor-pointer">
                   <input type="checkbox" checked={showHeatmap} onChange={(e) => setShowHeatmap(e.target.checked)} className="accent-cyan-500 w-3 h-3" />
                   Heatmap
                 </label>
-                <label className="text-[10px] text-slate-400 flex items-center gap-1 cursor-pointer">
+                <label className="text-[10px] text-mc-mute flex items-center gap-1 cursor-pointer">
                   <input type="checkbox" checked={showTrail} onChange={(e) => setShowTrail(e.target.checked)} className="accent-cyan-500 w-3 h-3" />
                   Trail
                 </label>
@@ -718,7 +728,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             </div>
             <div className="flex items-center gap-1 mb-2">
               {([["3d", "3D warehouse"], ["2d", "Floor plan"]] as const).map(([k, label]) => (
-                <button key={k} onClick={() => setMapView(k)} className={`px-3 py-1 rounded-md text-xs font-semibold border transition ${mapView === k ? "bg-cyan-500 text-slate-950 border-cyan-400" : "border-slate-600 text-slate-300 hover:bg-slate-700/50"}`}>
+                <button key={k} onClick={() => setMapView(k)} className={`px-3 py-1 rounded-md text-xs font-semibold border transition ${mapView === k ? "bg-cyan-500 text-slate-950 border-cyan-400" : "border-mc-line2 text-mc-ink/85 hover:bg-mc-raise/50"}`}>
                   {label}
                 </button>
               ))}
@@ -735,14 +745,14 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             </div>
             {/* Map Legend — explicit path ownership */}
             <div className="flex items-center gap-3 mt-2 px-1 flex-wrap">
-              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block" /> Robot</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> Obstacles</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> Human</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block" /> Proposed Path</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-purple-400 inline-block" /> Approved Plan</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> Executed Path</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" /> Goal</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2.5 h-2.5 rounded-sm bg-red-400/50 inline-block" /> Risk Zone</span>
+              <span className="flex items-center gap-1 text-[10px] text-mc-mute"><span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block" /> Robot</span>
+              <span className="flex items-center gap-1 text-[10px] text-mc-mute"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> Obstacles</span>
+              <span className="flex items-center gap-1 text-[10px] text-mc-mute"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> Human</span>
+              <span className="flex items-center gap-1 text-[10px] text-mc-mute"><span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block" /> Proposed Path</span>
+              <span className="flex items-center gap-1 text-[10px] text-mc-mute"><span className="w-2.5 h-2.5 rounded-full bg-purple-400 inline-block" /> Approved Plan</span>
+              <span className="flex items-center gap-1 text-[10px] text-mc-mute"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> Executed Path</span>
+              <span className="flex items-center gap-1 text-[10px] text-mc-mute"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" /> Goal</span>
+              <span className="flex items-center gap-1 text-[10px] text-mc-mute"><span className="w-2.5 h-2.5 rounded-sm bg-red-400/50 inline-block" /> Risk Zone</span>
               {/* Mission Alignment badge */}
               {llmPlan && executedPathData.length > 0 && (
                 <span className={`ml-auto flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
@@ -753,7 +763,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   {divergenceExplanation?.divergence_detected ? "⚠ Plan Diverged" : "✓ Following Approved Plan"}
                 </span>
               )}
-              {!llmPlan && <span className="text-[10px] text-slate-600 ml-auto">Scroll to zoom · Drag to pan</span>}
+              {!llmPlan && <span className="text-[10px] text-mc-dim ml-auto">Scroll to zoom · Drag to pan</span>}
             </div>
           </Card>
 
@@ -771,7 +781,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 { key: "executing", label: "Executing" },
                 { key: "done", label: "Done" },
               ] as const).map((st) => (
-                <div key={st.key} className={`text-[11px] px-2 py-1 rounded-full border transition ${pipelineStage === st.key ? "bg-purple-500 text-white border-purple-600" : "bg-slate-800 text-slate-400 border-slate-700"}`}>
+                <div key={st.key} className={`text-[11px] px-2 py-1 rounded-full border transition ${pipelineStage === st.key ? "bg-purple-500 text-white border-purple-600" : "bg-mc-panel text-mc-mute border-mc-line"}`}>
                   {st.label}
                 </div>
               ))}
@@ -782,13 +792,13 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border transition ${
                   autonomousMode
                     ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20"
-                    : "bg-slate-700/50 text-slate-400 border-slate-600"
+                    : "bg-mc-raise/50 text-mc-mute border-mc-line2"
                 }`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${autonomousMode ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} />
                 Autonomous: {autonomousMode ? "ON" : "OFF"}
               </button>
               {agenticResult?.memory_summary && (
-                <span className="text-[10px] text-slate-400 bg-slate-700/50 px-2 py-1 rounded-full border border-slate-600">
+                <span className="text-[10px] text-mc-mute bg-mc-raise/50 px-2 py-1 rounded-full border border-mc-line2">
                   🧠 Memory: {agenticResult.memory_summary.total_entries || 0} decisions retained
                 </span>
               )}
@@ -815,11 +825,11 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 const isDone = currentIdx > stageIdx;
                 return (
                   <React.Fragment key={stage.key}>
-                    {i > 0 && <div className={`flex-1 h-0.5 mx-1 rounded ${isDone ? "bg-green-500" : isActive ? "bg-purple-500 animate-pulse" : "bg-slate-700"}`} />}
+                    {i > 0 && <div className={`flex-1 h-0.5 mx-1 rounded ${isDone ? "bg-green-500" : isActive ? "bg-purple-500 animate-pulse" : "bg-mc-raise"}`} />}
                     <div className={`flex items-center gap-1 px-2 py-1 rounded-md border transition-all ${
                       isActive ? "border-purple-500/50 bg-purple-500/15 text-purple-300" :
                       isDone ? "border-green-500/30 bg-green-500/10 text-green-400" :
-                      "border-slate-700 text-slate-600"
+                      "border-mc-line text-mc-dim"
                     }`}>
                       <span>{isDone ? "✓" : stage.icon}</span>
                       <span>{stage.label}</span>
@@ -834,14 +844,14 @@ export default function RunPage({ params }: { params: { runId: string } }) {
               const bayGoal = resolveBayGoal(missionInstruction, world?.bays || []);
               const activeGoal = bayGoal || mission?.goal || null;
               return (
-                <div className="flex items-center gap-2 mb-2 text-xs text-slate-400">
+                <div className="flex items-center gap-2 mb-2 text-xs text-mc-mute">
                   {mission && (
                     <span className="bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 px-2 py-0.5 rounded-full">
                       Mission: {mission.title}
                     </span>
                   )}
                   {activeGoal && (
-                    <span className={`border px-2 py-0.5 rounded-full ${bayGoal ? "bg-green-500/15 border-green-500/30 text-green-300" : "bg-slate-700/50 border-slate-600 text-slate-300"}`}>
+                    <span className={`border px-2 py-0.5 rounded-full ${bayGoal ? "bg-green-500/15 border-green-500/30 text-green-300" : "bg-mc-raise/50 border-mc-line2 text-mc-ink/85"}`}>
                       {bayGoal ? "Bay Goal" : "Goal"}: ({activeGoal.x}, {activeGoal.y})
                     </span>
                   )}
@@ -857,7 +867,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   <div className="text-sm font-semibold text-cyan-300">
                     {currentStatus === "planning" ? "AI is generating a plan…" : "Mission running autonomously"}
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
+                  <div className="text-[11px] text-mc-mute mt-0.5">
                     {currentStatus === "planning"
                       ? "The Nemotron planner is computing an optimal multi-waypoint plan. The robot will not move until planning and governance review complete."
                       : "The robot is following the approved plan. Watch the map and chain-of-trust below for live progress."}
@@ -868,13 +878,13 @@ export default function RunPage({ params }: { params: { runId: string } }) {
 
             {/* ── Live planning progress log ── */}
             {planningSteps.length > 0 && (currentStatus === "planning" || currentStatus === "running") && (
-              <div className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 mb-3 space-y-1.5">
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Planning Progress</div>
+              <div className="bg-mc-bg/60 border border-mc-line rounded-lg p-3 mb-3 space-y-1.5">
+                <div className="text-[10px] uppercase tracking-wider text-mc-dim font-semibold mb-1">Planning Progress</div>
                 {planningSteps.map((s, i) => {
                   const icon = s.step === "llm_start" ? "🧠" : s.step === "llm_done" ? "✅" : s.step === "llm_fallback" || s.step === "llm_skip" ? "⚡" : s.step === "governance_start" ? "🛡️" : s.step === "governance_done" ? "✅" : "•";
                   const isLatest = i === planningSteps.length - 1;
                   return (
-                    <div key={i} className={`flex items-start gap-2 text-[11px] ${isLatest ? "text-cyan-300" : "text-slate-500"}`}>
+                    <div key={i} className={`flex items-start gap-2 text-[11px] ${isLatest ? "text-cyan-300" : "text-mc-dim"}`}>
                       <span className="mt-0.5 flex-shrink-0">{icon}</span>
                       <span className={isLatest && (s.step === "llm_start" || s.step === "governance_start") ? "animate-pulse" : ""}>{s.message}</span>
                     </div>
@@ -889,10 +899,10 @@ export default function RunPage({ params }: { params: { runId: string } }) {
               <input type="text" value={missionInstruction} onChange={(e) => setMissionInstruction(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && pipelineStage === "idle" && onRunPipeline()}
                 placeholder={mission?.title || "Navigate to loading bay avoiding obstacles"}
-                className="flex-1 bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 placeholder:text-slate-500" />
+                className="flex-1 bg-mc-bg/60 border border-mc-line2 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 placeholder:text-mc-dim" />
               <button onClick={onRunPipeline}
                 disabled={pipelineStage !== "idle" || !missionInstruction.trim()}
-                className="bg-purple-500 hover:bg-purple-600 disabled:bg-slate-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition whitespace-nowrap">
+                className="bg-purple-500 hover:bg-purple-600 disabled:bg-mc-line2 text-white text-sm font-semibold px-4 py-2 rounded-lg transition whitespace-nowrap">
                 {pipelineStage === "reasoning" ? "🧠 Reasoning..." : pipelineStage === "planning" ? "🗺️ Planning..." : pipelineStage === "executing" ? "🚀 Executing..." : pipelineStage === "done" ? "✓ Done" : "Plan →"}
               </button>
             </div>
@@ -912,10 +922,10 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             {pipelineStage === "reasoning" && liveThoughtChain.length === 0 && (
               <div className="space-y-2 mb-3 animate-pulse">
                 <div className="h-3 bg-purple-500/20 rounded w-1/3" />
-                <div className="bg-slate-900/60 border border-purple-500/10 rounded-lg p-3 space-y-2">
-                  <div className="h-2 bg-slate-700 rounded w-2/3" />
-                  <div className="h-2 bg-slate-700 rounded w-1/2" />
-                  <div className="h-2 bg-slate-700 rounded w-3/4" />
+                <div className="bg-mc-bg/60 border border-purple-500/10 rounded-lg p-3 space-y-2">
+                  <div className="h-2 bg-mc-raise rounded w-2/3" />
+                  <div className="h-2 bg-mc-raise rounded w-1/2" />
+                  <div className="h-2 bg-mc-raise rounded w-3/4" />
                   <div className="flex items-center gap-2"><span className="text-xs text-purple-400 animate-pulse">🧠 Reasoning...</span></div>
                 </div>
               </div>
@@ -926,7 +936,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
               <div className="space-y-2 mb-3 animate-pulse">
                 <div className="h-3 bg-purple-500/20 rounded w-1/4" />
                 <div className="flex gap-1">
-                  {[1,2,3,4].map(i => <div key={i} className="h-6 w-16 bg-slate-700 rounded" />)}
+                  {[1,2,3,4].map(i => <div key={i} className="h-6 w-16 bg-mc-raise rounded" />)}
                 </div>
                 <div className="flex items-center gap-2"><span className="text-xs text-purple-400 animate-pulse">🗺️ Generating waypoints...</span></div>
               </div>
@@ -936,9 +946,9 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             {pipelineStage === "reasoning" && liveThoughtChain.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 mb-2 animate-slide-up">
                 <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" />
-                <span className="text-xs text-slate-400">{liveThoughtChain.length} reasoning steps</span>
+                <span className="text-xs text-mc-mute">{liveThoughtChain.length} reasoning steps</span>
                 {liveThoughtChain.map((step: any, i: number) => (
-                  <span key={i} className="bg-slate-700 text-cyan-300 px-1.5 py-0.5 rounded font-mono text-[10px]">{step.action || "think"}</span>
+                  <span key={i} className="bg-mc-raise text-cyan-300 px-1.5 py-0.5 rounded font-mono text-[10px]">{step.action || "think"}</span>
                 ))}
               </div>
             )}
@@ -946,7 +956,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             {/* Stage 1 result: Agent Reasoning — STRUCTURED FORMAT */}
             {agenticResult && (
               <div className="space-y-2 mb-3">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Reasoning</div>
+                <div className="text-[10px] uppercase tracking-wide text-mc-dim font-semibold">Reasoning</div>
                 {agenticResult.replanning_used && (() => {
                   const replanSteps = (agenticResult.thought_chain || []).filter((s: any) => s.action === "replan");
                   return (
@@ -962,14 +972,14 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                         const riskMatch = rs.thought?.match(/Risk:\s*([\d.]+)/);
                         const stateMatch = rs.thought?.match(/State:\s*(\w+)/);
                         return (
-                          <div key={i} className="bg-slate-950/60 border border-amber-500/15 rounded p-2 space-y-1 text-[10px] font-mono">
+                          <div key={i} className="bg-mc-bg/60 border border-amber-500/15 rounded p-2 space-y-1 text-[10px] font-mono">
                             <div className="flex items-center gap-2">
                               <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 font-semibold">Attempt {i + 1} denied</span>
                               {stateMatch && <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">{stateMatch[1]}</span>}
                               {riskMatch && <span className="text-red-400">Risk: {(parseFloat(riskMatch[1]) * 100).toFixed(0)}%</span>}
                             </div>
                             {policyMatch && <div className="text-amber-400">Policies: {policyMatch[1].trim()}</div>}
-                            {reasonMatch && <div className="text-slate-400">{reasonMatch[1].trim()}</div>}
+                            {reasonMatch && <div className="text-mc-mute">{reasonMatch[1].trim()}</div>}
                           </div>
                         );
                       })}
@@ -978,17 +988,17 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 })()}
 
                 {/* Compact structured reasoning + confidence (collapsible details) */}
-                <div className="bg-slate-900/60 border border-purple-500/20 rounded-lg p-3 space-y-1.5 text-xs font-mono">
+                <div className="bg-mc-bg/60 border border-purple-500/20 rounded-lg p-3 space-y-1.5 text-xs font-mono">
                   <div className="flex items-start gap-2">
                     <span className="text-purple-400 font-bold min-w-[80px]">Goal:</span>
                     <span className="text-white truncate">{missionInstruction || "—"}</span>
-                    <button onClick={() => setShowReasoningDetails(!showReasoningDetails)} className="ml-auto text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded">
+                    <button onClick={() => setShowReasoningDetails(!showReasoningDetails)} className="ml-auto text-[10px] text-mc-mute hover:text-mc-ink px-2 py-0.5 rounded">
                       {showReasoningDetails ? "Hide details" : "Show details"}
                     </button>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-cyan-400 font-bold min-w-[80px]">Constraints:</span>
-                    <div className="text-slate-300 space-y-0.5">
+                    <div className="text-mc-ink/85 space-y-0.5">
                       {world?.human && <div>- Human @{world.human.x},{world.human.y}</div>}
                       {(world?.obstacles || []).slice(0, 1).map((o: any, i: number) => (
                         <div key={i}>- Obstacle @{o.x},{o.y}</div>
@@ -997,11 +1007,11 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-emerald-400 font-bold min-w-[80px]">Strategy:</span>
-                    <div className="text-slate-300 space-y-0.5">
+                    <div className="text-mc-ink/85 space-y-0.5">
                       {(agenticResult.thought_chain || []).filter((s: any) => s.thought && s.action !== "replan").slice(0, 2).map((s: any, i: number) => (
                         <div key={i}>- {s.thought}</div>
                       ))}
-                      {(agenticResult.thought_chain || []).length > 2 && <div className="text-slate-500">+{(agenticResult.thought_chain || []).length - 2} more steps</div>}
+                      {(agenticResult.thought_chain || []).length > 2 && <div className="text-mc-dim">+{(agenticResult.thought_chain || []).length - 2} more steps</div>}
                     </div>
                   </div>
                   {/* Planner Confidence vs Governance Risk — explicitly distinct */}
@@ -1017,7 +1027,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                         return (
                           <>
                             <span className={`font-bold ${color}`}>{pct}%</span>
-                            <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden ml-1">
+                            <div className="flex-1 h-1 bg-mc-raise rounded-full overflow-hidden ml-1">
                               <div className={`h-full rounded-full transition-all duration-500 ${adjusted > 0.7 ? "bg-green-500" : adjusted > 0.4 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${adjusted * 100}%` }} />
                             </div>
                           </>
@@ -1035,7 +1045,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                         return (
                           <>
                             <span className={`font-bold ${color}`}>{pct}%</span>
-                            <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden ml-1">
+                            <div className="flex-1 h-1 bg-mc-raise rounded-full overflow-hidden ml-1">
                               <div className={`h-full rounded-full transition-all duration-500 ${risk > 0.5 ? "bg-red-500" : risk > 0.2 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${risk * 100}%` }} />
                             </div>
                           </>
@@ -1043,12 +1053,12 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                       })()
                     }
                   </div>
-                  <div className="text-[10px] text-slate-600 italic mt-0.5">High planner confidence ≠ safe execution — governance overrides unsafe plans regardless of confidence</div>
+                  <div className="text-[10px] text-mc-dim italic mt-0.5">High planner confidence ≠ safe execution — governance overrides unsafe plans regardless of confidence</div>
 
                   {/* Collapsible full detail view */}
                   {showReasoningDetails && (
                     <div className="mt-2">
-                      <div className="bg-slate-950/60 border border-slate-700/50 rounded p-2 space-y-1">
+                      <div className="bg-mc-bg/60 border border-mc-line/50 rounded p-2 space-y-1">
                         {(agenticResult.thought_chain || []).filter((s: any) => s.action).map((s: any, i: number) => {
                           const isReplan = s.action === "replan";
                           const isOk = !isReplan && !s.observation?.toLowerCase().includes("denied") && !s.observation?.toLowerCase().includes("violation");
@@ -1058,11 +1068,11 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                                 isReplan ? "bg-amber-500/20 text-amber-300" :
                                 s.action === "submit_action" ? "bg-green-500/20 text-green-300" :
                                 s.action === "check_policy" ? "bg-cyan-500/20 text-cyan-300" :
-                                "bg-slate-700 text-slate-300"
+                                "bg-mc-raise text-mc-ink/85"
                               }`}>{s.action}</span>
-                              <span className="text-slate-600">→</span>
+                              <span className="text-mc-dim">→</span>
                               <span className={isReplan ? "text-amber-400" : isOk ? "text-green-400" : "text-amber-400"}>{isReplan ? "⟳ replanning" : isOk ? "OK" : "⚠ violation"}</span>
-                              {s.thought && <span className={`truncate max-w-[300px] ${isReplan ? "text-amber-400/70" : "text-slate-500"}`}>{s.thought}</span>}
+                              {s.thought && <span className={`truncate max-w-[300px] ${isReplan ? "text-amber-400/70" : "text-mc-dim"}`}>{s.thought}</span>}
                             </div>
                           );
                         })}
@@ -1079,7 +1089,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                       <div key={i} className="flex items-center gap-2 font-mono text-amber-400/80">
                         <span>↳ Previous denial:</span>
                         <span className="text-amber-300">{(e.policy_hits || []).join(", ") || "policy hit"}</span>
-                        <span className="text-slate-500">→ Adjusted: {e.intent} @{e.params?.max_speed || "?"}</span>
+                        <span className="text-mc-dim">→ Adjusted: {e.intent} @{e.params?.max_speed || "?"}</span>
                       </div>
                     ))}
                   </div>
@@ -1087,17 +1097,17 @@ export default function RunPage({ params }: { params: { runId: string } }) {
 
                 {/* Proposal + model info line */}
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-slate-500 text-[10px]">{agenticResult.thought_chain?.length || 0} steps</span>
+                  <span className="text-mc-dim text-[10px]">{agenticResult.thought_chain?.length || 0} steps</span>
                   {[...new Set((agenticResult.thought_chain || []).map((s: any) => s.action).filter(Boolean))].map((tool: string, i: number) => (
                     <span key={i} className={`px-1.5 py-0.5 rounded font-mono text-[10px] ${
-                      tool === "submit_action" ? "bg-green-500/20 text-green-300" : tool === "check_policy" ? "bg-cyan-500/20 text-cyan-300" : tool === "graceful_stop" ? "bg-amber-500/20 text-amber-300" : tool === "replan" ? "bg-red-500/20 text-red-300" : "bg-slate-700 text-slate-300"
+                      tool === "submit_action" ? "bg-green-500/20 text-green-300" : tool === "check_policy" ? "bg-cyan-500/20 text-cyan-300" : tool === "graceful_stop" ? "bg-amber-500/20 text-amber-300" : tool === "replan" ? "bg-red-500/20 text-red-300" : "bg-mc-raise text-mc-ink/85"
                     }`}>{tool}</span>
                   ))}
                   {agenticResult.proposal && (
                     <>
-                      <span className="text-slate-600">→</span>
+                      <span className="text-mc-dim">→</span>
                       <span className="font-semibold text-cyan-400">{agenticResult.proposal.intent}</span>
-                      {agenticResult.proposal.params?.x != null && <span className="text-slate-400">({agenticResult.proposal.params.x}, {agenticResult.proposal.params.y})</span>}
+                      {agenticResult.proposal.params?.x != null && <span className="text-mc-mute">({agenticResult.proposal.params.x}, {agenticResult.proposal.params.y})</span>}
                     </>
                   )}
                 </div>
@@ -1112,12 +1122,12 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                         {agenticResult.governance.decision === "APPROVED" ? "✓" : agenticResult.governance.decision === "DENIED" ? "✗" : "⚠"}{" "}
                         {agenticResult.governance.decision === "APPROVED" ? "Checks Passed" : agenticResult.governance.decision === "DENIED" ? "Checks Failed" : "Review Required"}
                       </span>
-                      <span className="text-slate-500 text-[10px]">Preliminary Validation</span>
+                      <span className="text-mc-dim text-[10px]">Preliminary Validation</span>
                     </div>
                     <div className="flex items-center gap-3 text-[10px]">
-                      <span className="text-slate-500">Planner Confidence: <span className={`font-bold ${(1 - (agenticResult.governance.risk_score ?? 0)) > 0.7 ? "text-green-400" : "text-yellow-400"}`}>{((1 - (agenticResult.governance.risk_score ?? 0)) * 100).toFixed(0)}%</span></span>
-                      <span className="text-slate-600">|</span>
-                      <span className="text-slate-500">Governance Risk: <span className={`font-bold ${(agenticResult.governance.risk_score ?? 0) > 0.5 ? "text-red-400" : (agenticResult.governance.risk_score ?? 0) > 0.2 ? "text-yellow-400" : "text-green-400"}`}>{((agenticResult.governance.risk_score ?? 0) * 100).toFixed(0)}%</span></span>
+                      <span className="text-mc-dim">Planner Confidence: <span className={`font-bold ${(1 - (agenticResult.governance.risk_score ?? 0)) > 0.7 ? "text-green-400" : "text-yellow-400"}`}>{((1 - (agenticResult.governance.risk_score ?? 0)) * 100).toFixed(0)}%</span></span>
+                      <span className="text-mc-dim">|</span>
+                      <span className="text-mc-dim">Governance Risk: <span className={`font-bold ${(agenticResult.governance.risk_score ?? 0) > 0.5 ? "text-red-400" : (agenticResult.governance.risk_score ?? 0) > 0.2 ? "text-yellow-400" : "text-green-400"}`}>{((agenticResult.governance.risk_score ?? 0) * 100).toFixed(0)}%</span></span>
                     </div>
                     {/* Why Approved / Why Denied — explainability */}
                     {agenticResult.governance.decision === "APPROVED" && telemetry && (
@@ -1137,22 +1147,22 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                     )}
                   </div>
                 )}
-                {agenticResult.model_used && <div className="text-[10px] text-slate-600 font-mono">Model: {agenticResult.model_used}</div>}
+                {agenticResult.model_used && <div className="text-[10px] text-mc-dim font-mono">Model: {agenticResult.model_used}</div>}
               </div>
             )}
 
             {/* Auto-Pilot Reasoning (when backend drives the run — no manual agenticResult) */}
             {!agenticResult && llmPlan && (
               <div className="space-y-2 mb-3">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">AI Reasoning</div>
-                <div className="bg-slate-900/60 border border-cyan-500/20 rounded-lg p-3 space-y-1.5 text-xs font-mono">
+                <div className="text-[10px] uppercase tracking-wide text-mc-dim font-semibold">AI Reasoning</div>
+                <div className="bg-mc-bg/60 border border-cyan-500/20 rounded-lg p-3 space-y-1.5 text-xs font-mono">
                   <div className="flex items-start gap-2">
                     <span className="text-purple-400 font-bold min-w-[80px]">Goal:</span>
                     <span className="text-white truncate">{missionInstruction || mission?.title || "—"}</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-cyan-400 font-bold min-w-[80px]">Constraints:</span>
-                    <div className="text-slate-300 space-y-0.5">
+                    <div className="text-mc-ink/85 space-y-0.5">
                       {world?.human && <div>- Human detected @({world.human.x}, {world.human.y})</div>}
                       {(world?.obstacles || []).slice(0, 3).map((o: any, i: number) => (
                         <div key={i}>- Obstacle @({o.x}, {o.y})</div>
@@ -1163,7 +1173,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-emerald-400 font-bold min-w-[80px]">Strategy:</span>
-                    <span className="text-slate-300">{llmPlan.rationale || "Direct path with obstacle avoidance and human safety margins"}</span>
+                    <span className="text-mc-ink/85">{llmPlan.rationale || "Direct path with obstacle avoidance and human safety margins"}</span>
                   </div>
                   {/* Planner Confidence */}
                   <div className="flex items-center gap-2">
@@ -1176,7 +1186,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                       return (
                         <>
                           <span className={`font-bold ${color}`}>{pct}%</span>
-                          <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden ml-1">
+                          <div className="flex-1 h-1 bg-mc-raise rounded-full overflow-hidden ml-1">
                             <div className={`h-full rounded-full transition-all duration-500 ${confidence > 0.7 ? "bg-green-500" : confidence > 0.4 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${confidence * 100}%` }} />
                           </div>
                         </>
@@ -1193,14 +1203,14 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                       return (
                         <>
                           <span className={`font-bold ${color}`}>{pct}%</span>
-                          <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden ml-1">
+                          <div className="flex-1 h-1 bg-mc-raise rounded-full overflow-hidden ml-1">
                             <div className={`h-full rounded-full transition-all duration-500 ${risk > 0.5 ? "bg-red-500" : risk > 0.2 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${risk * 100}%` }} />
                           </div>
                         </>
                       );
                     })()}
                   </div>
-                  <div className="text-[10px] text-slate-600 italic">High planner confidence ≠ safe execution — governance overrides unsafe plans regardless of confidence</div>
+                  <div className="text-[10px] text-mc-dim italic">High planner confidence ≠ safe execution — governance overrides unsafe plans regardless of confidence</div>
                 </div>
 
                 {/* MoveProof Checks from MISSION_REVIEW */}
@@ -1235,35 +1245,35 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 )}
 
                 {/* Model info */}
-                {llmPlan.model && <div className="text-[10px] text-slate-600 font-mono">Model: {llmPlan.model}</div>}
+                {llmPlan.model && <div className="text-[10px] text-mc-dim font-mono">Model: {llmPlan.model}</div>}
               </div>
             )}
 
             {/* Stage 2 result: Waypoint Plan */}
             {llmPlan && (
               <div className="space-y-2 mb-3">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Waypoint Plan</div>
+                <div className="text-[10px] uppercase tracking-wide text-mc-dim font-semibold">Waypoint Plan</div>
                 {/* Planner → Governance → Execution alignment strip */}
-                <div className="grid grid-cols-3 gap-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg p-2">
+                <div className="grid grid-cols-3 gap-1.5 bg-mc-bg/50 border border-mc-line/50 rounded-lg p-2">
                   <div className="flex flex-col items-center text-center">
-                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Planner Output</span>
-                    <span className={`text-[11px] font-bold ${llmPlan.all_approved === true ? "text-green-400" : llmPlan.all_approved === false ? "text-yellow-400" : missionReview?.verdict === "APPROVED" ? "text-green-400" : "text-slate-400"}`}>
+                    <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Planner Output</span>
+                    <span className={`text-[11px] font-bold ${llmPlan.all_approved === true ? "text-green-400" : llmPlan.all_approved === false ? "text-yellow-400" : missionReview?.verdict === "APPROVED" ? "text-green-400" : "text-mc-mute"}`}>
                       {llmPlan.all_approved === true ? "Clean" : llmPlan.all_approved === false ? "Flagged" : missionReview?.verdict === "APPROVED" ? "Verified ✓" : "Pending"}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center text-center border-x border-slate-700/50">
-                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Governance Result</span>
+                  <div className="flex flex-col items-center text-center border-x border-mc-line/50">
+                    <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Governance Result</span>
                     <span className={`text-[11px] font-bold ${llmPlan.all_approved === false ? "text-cyan-400" : "text-green-400"}`}>
                       {llmPlan.all_approved === false ? "Approved with Constraints" : missionReview?.verdict === "APPROVED" ? "MoveProof Approved" : "Approved"}
                     </span>
                   </div>
                   <div className="flex flex-col items-center text-center">
-                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Execution Mode</span>
+                    <span className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Execution Mode</span>
                     <span className={`text-[11px] font-bold ${
                       pipelineStage === "executing" ? "text-purple-400" :
                       pipelineStage === "done" ? "text-green-400" :
                       safety.state === "STOP" ? "text-red-400" :
-                      safety.state === "SLOW" ? "text-yellow-400" : "text-slate-400"
+                      safety.state === "SLOW" ? "text-yellow-400" : "text-mc-mute"
                     }`}>
                       {pipelineStage === "executing" ? "Executing" :
                        pipelineStage === "done" ? "Completed" :
@@ -1277,7 +1287,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${llmPlan.all_approved === false ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
                     {llmPlan.all_approved === true ? "All Approved" : llmPlan.all_approved === false ? "Flagged" : missionReview?.verdict === "APPROVED" ? "MoveProof Approved" : "Under Review"}
                   </span>
-                  <span className="text-[10px] text-slate-500">{llmPlan.waypoints?.length || 0} waypoints</span>
+                  <span className="text-[10px] text-mc-dim">{llmPlan.waypoints?.length || 0} waypoints</span>
                   <span className="text-[10px] text-purple-400">{llmPlan.rationale}</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
@@ -1304,7 +1314,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             {/* Execute button */}
             {pipelineStage === "ready" && llmPlan && (
               <button onClick={onExecutePipeline} disabled={currentStatus === "stopped"}
-                className="w-full bg-green-500/80 hover:bg-green-600 disabled:bg-slate-600 text-white text-xs font-semibold py-2 rounded-lg transition mb-2">
+                className="w-full bg-green-500/80 hover:bg-green-600 disabled:bg-mc-line2 text-white text-xs font-semibold py-2 rounded-lg transition mb-2">
                 🚀 Execute Plan in Simulation
               </button>
             )}
@@ -1315,7 +1325,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             {/* Stage 3 result: Execution */}
             {llmExecResult && (
               <div className="space-y-1 mb-2">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Execution Result</div>
+                <div className="text-[10px] uppercase tracking-wide text-mc-dim font-semibold">Execution Result</div>
                 <span className={`text-xs font-semibold ${llmExecResult.status === "completed" ? "text-green-400" : "text-yellow-400"}`}>
                   {llmExecResult.status?.toUpperCase()}
                 </span>
@@ -1323,17 +1333,17 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   <div key={i} className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${step.executed ? "bg-green-500/10" : "bg-red-500/10"}`}>
                     <span className="font-mono text-purple-400">WP{step.waypoint_index + 1}</span>
                     <span className={step.executed ? "text-green-400" : "text-red-400"}>{step.executed ? "✓" : "✗"}</span>
-                    <span className="text-slate-500">{step.policy_state}</span>
+                    <span className="text-mc-dim">{step.policy_state}</span>
                   </div>
                 ))}
-                <div className="text-[10px] text-slate-600 font-mono">Hash: {llmExecResult.audit_hash?.slice(0, 20)}…</div>
+                <div className="text-[10px] text-mc-dim font-mono">Hash: {llmExecResult.audit_hash?.slice(0, 20)}…</div>
               </div>
             )}
 
             {/* Reset button when done */}
             {(pipelineStage === "done" || pipelineStage === "ready") && (
               <button onClick={() => { setPipelineStage("idle"); setAgenticResult(null); setLlmPlan(null); setLlmExecResult(null); setMissionError(null); setReplanCount(0); setLastDenialPolicy(null); setActiveWaypointIdx(-1); }}
-                className="w-full text-xs text-slate-500 hover:text-slate-300 py-1 transition">
+                className="w-full text-xs text-mc-dim hover:text-mc-ink/85 py-1 transition">
                 ↺ New Mission
               </button>
             )}
@@ -1347,7 +1357,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
           {/* Compact Governance Decision */}
           <Card title="Governance Decision">
             {!lastDecision ? (
-              <div className="text-slate-500 text-xs text-center py-3">⏳ Awaiting first decision…</div>
+              <div className="text-mc-dim text-xs text-center py-3">⏳ Awaiting first decision…</div>
             ) : (
               <div className={`space-y-2 ${isFullscreen ? "text-[10px]" : "text-xs"} rounded-lg ${isFullscreen ? "p-2 -mx-0.5" : "p-3 -mx-1"} ${
                 lastDecision.governance?.decision === "APPROVED" ? "animate-glow-green" :
@@ -1367,23 +1377,23 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                         : lastDecision.governance?.decision || "—"}
                     </span>
                   </div>
-                  <span className="text-slate-400">Execution Risk: {lastDecision.governance?.risk_score != null ? (lastDecision.governance.risk_score * 100).toFixed(0) + "%" : "—"}</span>
+                  <span className="text-mc-mute">Execution Risk: {lastDecision.governance?.risk_score != null ? (lastDecision.governance.risk_score * 100).toFixed(0) + "%" : "—"}</span>
                 </div>
                 {/* Scope clarification: what exactly was approved/denied */}
                 {!isFullscreen && (
-                <div className="bg-slate-900/40 rounded px-2 py-1.5 text-[10px] space-y-0.5">
+                <div className="bg-mc-bg/40 rounded px-2 py-1.5 text-[10px] space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500 min-w-[65px]">Scope:</span>
-                    <span className="text-slate-300">Current action only</span>
+                    <span className="text-mc-dim min-w-[65px]">Scope:</span>
+                    <span className="text-mc-ink/85">Current action only</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500 min-w-[65px]">Intent:</span>
+                    <span className="text-mc-dim min-w-[65px]">Intent:</span>
                     <span className="text-white font-semibold">{lastDecision.proposal?.intent || "—"}</span>
-                    {lastDecision.proposal?.params?.x != null && <span className="text-slate-400">→ ({lastDecision.proposal.params.x.toFixed?.(1)}, {lastDecision.proposal.params.y?.toFixed?.(1)})</span>}
+                    {lastDecision.proposal?.params?.x != null && <span className="text-mc-mute">→ ({lastDecision.proposal.params.x.toFixed?.(1)}, {lastDecision.proposal.params.y?.toFixed?.(1)})</span>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500 min-w-[65px]">Policies:</span>
-                    <span className="text-slate-300 font-mono">{(lastDecision.governance?.policy_hits || []).length > 0
+                    <span className="text-mc-dim min-w-[65px]">Policies:</span>
+                    <span className="text-mc-ink/85 font-mono">{(lastDecision.governance?.policy_hits || []).length > 0
                       ? (lastDecision.governance.policy_hits).join(", ")
                       : <span className="text-green-400">✓ 0 violations (11 active)</span>}</span>
                   </div>
@@ -1417,7 +1427,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   </div>
                 )}
                 {lastDecision.governance?.reasons?.length > 0 && (
-                  <div className="text-slate-400 bg-slate-900/40 rounded p-2">
+                  <div className="text-mc-mute bg-mc-bg/40 rounded p-2">
                     <div className="text-red-400 font-semibold text-[10px] uppercase tracking-wider mb-1">Policy Violations</div>
                     {lastDecision.governance.reasons.map((r: string, i: number) => <div key={i}>• {r}</div>)}
                   </div>
@@ -1431,61 +1441,282 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             )}
           </Card>
 
-          {/* Tavily site intelligence (untrusted input) */}
-          <SiteIntelPanel />
+          {/* Secondary panels in tabs: the gate decision above stays visible */}
+          <div>
+            <Tabs value={sideTab} onChange={setSideTab} tabs={[
+              { id: "intel", label: "Site & vision" },
+              { id: "chain", label: "Chain & telemetry" },
+              { id: "alerts", label: "Alerts", count: alerts.length },
+              { id: "analysis", label: "Analysis" },
+            ]} />
+            <div className="pt-3 space-y-3">
+            {sideTab === "intel" && (<>
+            {/* Tavily site intelligence (untrusted input) */}
+            <SiteIntelPanel />
 
-          {/* NVIDIA vision model on the robot camera, cross-checked with sensors */}
-          <VisionPanel runId={runId} />
+            {/* NVIDIA vision model on the robot camera, cross-checked with sensors */}
+            <VisionPanel runId={runId} />
 
-          {/* Compact Telemetry */}
-          <CollapsibleCard title="Live Telemetry" defaultOpen={false}>
-            {!telemetry ? (
-              <div className="text-slate-500 text-xs text-center py-2">📡 Waiting…</div>
-            ) : (
-              <div>
-                <div className={`grid grid-cols-2 gap-x-4 gap-y-1 ${isFullscreen ? "text-[10px]" : "text-xs"} mb-2`}>
-                  <div><span className="text-slate-500">x:</span> <span className="text-white font-mono">{(+telemetry.x).toFixed(1)}</span></div>
-                  <div><span className="text-slate-500">y:</span> <span className="text-white font-mono">{(+telemetry.y).toFixed(1)}</span></div>
-                  <div><span className="text-slate-500">heading:</span> <span className="text-white font-mono">{((+telemetry.theta || 0) * 180 / Math.PI).toFixed(0)}°</span></div>
-                  <div><span className="text-slate-500">speed:</span> <span className="text-white font-mono">{(+telemetry.speed).toFixed(2)} m/s</span></div>
-                  <div><span className="text-slate-500">human:</span> <span className="text-white font-mono">{(+telemetry.human_distance_m).toFixed(1)}m</span></div>
-                  <div><span className="text-slate-500">obstacle:</span> <span className="text-white font-mono">{(+telemetry.nearest_obstacle_m).toFixed(1)}m</span></div>
+            </>)}
+            {sideTab === "chain" && (<>
+            {/* Compact Telemetry */}
+            <CollapsibleCard title="Live Telemetry" defaultOpen={false}>
+              {!telemetry ? (
+                <div className="text-mc-dim text-xs text-center py-2">📡 Waiting…</div>
+              ) : (
+                <div>
+                  <div className={`grid grid-cols-2 gap-x-4 gap-y-1 ${isFullscreen ? "text-[10px]" : "text-xs"} mb-2`}>
+                    <div><span className="text-mc-dim">x:</span> <span className="text-white font-mono">{(+telemetry.x).toFixed(1)}</span></div>
+                    <div><span className="text-mc-dim">y:</span> <span className="text-white font-mono">{(+telemetry.y).toFixed(1)}</span></div>
+                    <div><span className="text-mc-dim">heading:</span> <span className="text-white font-mono">{((+telemetry.theta || 0) * 180 / Math.PI).toFixed(0)}°</span></div>
+                    <div><span className="text-mc-dim">speed:</span> <span className="text-white font-mono">{(+telemetry.speed).toFixed(2)} m/s</span></div>
+                    <div><span className="text-mc-dim">human:</span> <span className="text-white font-mono">{(+telemetry.human_distance_m).toFixed(1)}m</span></div>
+                    <div><span className="text-mc-dim">obstacle:</span> <span className="text-white font-mono">{(+telemetry.nearest_obstacle_m).toFixed(1)}m</span></div>
+                  </div>
+                  <details>
+                    <summary className="text-[10px] text-mc-dim cursor-pointer hover:text-mc-mute">Show Raw JSON</summary>
+                    <pre className="text-[10px] text-green-400/70 bg-mc-bg/60 p-2 rounded mt-1 overflow-x-auto max-h-40 overflow-y-auto font-mono">
+  {JSON.stringify(telemetry, null, 2)}
+                    </pre>
+                  </details>
                 </div>
-                <details>
-                  <summary className="text-[10px] text-slate-500 cursor-pointer hover:text-slate-400">Show Raw JSON</summary>
-                  <pre className="text-[10px] text-green-400/70 bg-slate-900/60 p-2 rounded mt-1 overflow-x-auto max-h-40 overflow-y-auto font-mono">
-{JSON.stringify(telemetry, null, 2)}
-                  </pre>
-                </details>
-              </div>
-            )}
-          </CollapsibleCard>
+              )}
+            </CollapsibleCard>
 
-          {/* Chain-of-Trust Timeline (compact, icons) */}
-          <Card title="Chain-of-Trust">
-            {events.length === 0 ? (
-              <div className="text-slate-500 text-xs text-center py-2">🔗 No events yet.</div>
-            ) : (
-              <div className={`${isFullscreen ? "max-h-32" : "max-h-60"} overflow-y-auto space-y-0.5 timeline-live-line`}>
-                {events.slice(isFullscreen ? -5 : -10).reverse().map((e) => {
-                  const icon = e.type === "DECISION" ? "🔵" : e.type === "TELEMETRY" ? "🟢" : "🟠";
-                  return (
-                    <details key={e.id} className="group">
-                      <summary className="cursor-pointer py-1.5 flex items-center gap-1.5 text-xs hover:bg-slate-700/30 rounded px-1 -mx-1">
-                        <span className="text-[10px]">{icon}</span>
-                        <span className="text-slate-500 font-mono text-[10px]">{new Date(e.ts).toLocaleTimeString()}</span>
-                        <span className="font-semibold text-[10px] text-slate-300">{e.type}</span>
-                        <span className="text-slate-700 text-[10px] font-mono ml-auto">{e.hash?.slice(0, 8)}…</span>
-                      </summary>
-                      <pre className="text-[10px] text-slate-400 bg-slate-900/60 p-2 rounded overflow-x-auto mt-0.5 font-mono max-h-24 overflow-y-auto">
-{JSON.stringify(e.payload, null, 2)}
-                      </pre>
-                    </details>
-                  );
-                })}
-              </div>
+            {/* Chain-of-Trust Timeline (compact, icons) */}
+            <Card title="Chain-of-Trust">
+              {events.length === 0 ? (
+                <div className="text-mc-dim text-xs text-center py-2">🔗 No events yet.</div>
+              ) : (
+                <div className={`${isFullscreen ? "max-h-32" : "max-h-60"} overflow-y-auto space-y-0.5 timeline-live-line`}>
+                  {events.slice(isFullscreen ? -5 : -10).reverse().map((e) => {
+                    const icon = e.type === "DECISION" ? "🔵" : e.type === "TELEMETRY" ? "🟢" : "🟠";
+                    return (
+                      <details key={e.id} className="group">
+                        <summary className="cursor-pointer py-1.5 flex items-center gap-1.5 text-xs hover:bg-mc-raise/30 rounded px-1 -mx-1">
+                          <span className="text-[10px]">{icon}</span>
+                          <span className="text-mc-dim font-mono text-[10px]">{new Date(e.ts).toLocaleTimeString()}</span>
+                          <span className="font-semibold text-[10px] text-mc-ink/85">{e.type}</span>
+                          <span className="text-slate-700 text-[10px] font-mono ml-auto">{e.hash?.slice(0, 8)}…</span>
+                        </summary>
+                        <pre className="text-[10px] text-mc-mute bg-mc-bg/60 p-2 rounded overflow-x-auto mt-0.5 font-mono max-h-24 overflow-y-auto">
+  {JSON.stringify(e.payload, null, 2)}
+                        </pre>
+                      </details>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
+            </>)}
+            {sideTab === "alerts" && (<>
+            {/* Alerts */}
+            {!isFullscreen && (
+            <Card title="Alerts">
+              {alerts.length === 0 ? (
+                <div className="text-xs text-mc-dim space-y-1">
+                  <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/10 rounded px-2 py-1">
+                    <span className="text-green-400 text-[10px]">●</span>
+                    <span className="text-[10px] text-mc-dim font-mono mr-1">PWR</span>
+                    <span className="text-mc-mute">Battery at 96% — normal operating range</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/10 rounded px-2 py-1">
+                    <span className="text-green-400 text-[10px]">●</span>
+                    <span className="text-[10px] text-mc-dim font-mono mr-1">NAV</span>
+                    <span className="text-mc-mute">Path deviation 0.12m — within ±0.5m tolerance</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/10 rounded px-2 py-1">
+                    <span className="text-green-400 text-[10px]">●</span>
+                    <span className="text-[10px] text-mc-dim font-mono mr-1">SEN</span>
+                    <span className="text-mc-mute">Motor temp 42°C — below 65°C threshold</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/10 rounded px-2 py-1">
+                    <span className="text-green-400 text-[10px]">●</span>
+                    <span className="text-[10px] text-mc-dim font-mono mr-1">COM</span>
+                    <span className="text-mc-mute">Position update latency 12ms — below 100ms threshold</span>
+                  </div>
+                </div>
+              ) : (
+                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                  {alerts.map((a, i) => {
+                    const msg = a.event || JSON.stringify(a);
+                    const category = msg.toLowerCase().includes("path") ? "NAV"
+                      : msg.toLowerCase().includes("speed") || msg.toLowerCase().includes("motor") ? "SEN"
+                      : msg.toLowerCase().includes("human") || msg.toLowerCase().includes("proximity") ? "SAF"
+                      : msg.toLowerCase().includes("battery") || msg.toLowerCase().includes("power") ? "PWR"
+                      : msg.toLowerCase().includes("latency") || msg.toLowerCase().includes("stale") ? "COM"
+                      : "SYS";
+                    return (
+                      <li key={i} className="flex items-start gap-1.5 text-xs bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5">
+                        <span className="text-red-400">⚠️</span>
+                        <span className="text-[10px] text-red-400/70 font-mono min-w-[24px]">{category}</span>
+                        <span className="text-mc-ink/85">{msg}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
             )}
-          </Card>
+
+            </>)}
+            {sideTab === "analysis" && (<>
+            {/* Scorecard (#10) */}
+            {!isFullscreen && (
+            <CollapsibleCard title="📊 Performance Scorecard" defaultOpen={true}
+              hint={<span className="text-mc-mute">5 dimensions tracked</span>}>
+              <ScoreCard runId={runId} />
+            </CollapsibleCard>
+            )}
+
+            {/* Agent Introspection (#20) */}
+            {!isFullscreen && (
+            <CollapsibleCard title="🔍 Agent Introspection" defaultOpen={true}
+              hint={replanCount > 0 ? <span className="text-amber-400">{replanCount} replans · {lastDenialPolicy || "policy hit"}</span> : <span className="text-green-400">No denials</span>}>
+              <IntrospectionPanel runId={runId} />
+            </CollapsibleCard>
+            )}
+
+            {/* Safety Report (#14) */}
+            {!isFullscreen && (
+            <CollapsibleCard title="🛡️ Safety Report" defaultOpen={false}
+              hint={safetyReport ? <span className={safetyReport.verdict === "PASS" ? "text-green-400" : "text-red-400"}>{safetyReport.verdict === "PASS" ? "✓ PASS" : safetyReport.verdict === "FAIL" ? "✗ FAIL" : "⚠ " + safetyReport.verdict} · {safetyReport.checks_run || 0} checks</span> : <span className="text-mc-dim">Awaiting data</span>}>
+              {!safetyReport ? (
+                <div className="text-xs text-mc-dim text-center py-2">No safety report yet</div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full border ${
+                      safetyReport.verdict === "PASS" ? "bg-green-500/15 text-green-400 border-green-500/30" :
+                      safetyReport.verdict === "FAIL" ? "bg-red-500/15 text-red-400 border-red-500/30" :
+                      "bg-yellow-500/15 text-yellow-400 border-yellow-500/30"
+                    }`}>
+                      {safetyReport.verdict === "PASS" ? "✓ PASS" : safetyReport.verdict === "FAIL" ? "✗ FAIL" : "⚠ " + (safetyReport.verdict || "N/A")}
+                    </span>
+                    <span className="text-[10px] text-mc-dim">{safetyReport.checks_run || 0} checks</span>
+                  </div>
+                  {safetyReport.violations?.length > 0 && (
+                    <div className="space-y-1">
+                      {safetyReport.violations.map((v: any, i: number) => (
+                        <div key={i} className="text-[10px] bg-red-500/10 border border-red-500/20 rounded px-2 py-1 text-red-300">
+                          <span className="font-bold">{v.check || v.name}</span>: {v.detail || v.message || "threshold exceeded"}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {safetyReport.thresholds && (
+                    <div className="text-[10px] text-mc-dim space-y-0.5">
+                      {Object.entries(safetyReport.thresholds).map(([k, v]) => (
+                        <div key={k} className="flex justify-between">
+                          <span>{k.replace(/_/g, " ")}</span>
+                          <span className="font-mono text-mc-mute">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {safetyReport.summary && <div className="text-[10px] text-mc-mute bg-mc-bg/60 rounded p-2">{safetyReport.summary}</div>}
+                </div>
+              )}
+            </CollapsibleCard>
+            )}
+
+            {/* Optimization Analysis (#7) */}
+            {!isFullscreen && (
+            <CollapsibleCard title="⚡ Optimization Analysis" defaultOpen={false}
+              hint={optimizationAnalysis ? <span className="text-cyan-400">Eff: {((optimizationAnalysis.scorecard?.scores?.efficiency ?? 0) * 100).toFixed(0)}% · Safety: {((optimizationAnalysis.scorecard?.scores?.safety ?? 0) * 100).toFixed(0)}%</span> : <span className="text-mc-dim">Click to load</span>}>
+              {!optimizationAnalysis ? (
+                <div className="text-center py-2">
+                  <button onClick={async () => { try { setOptimizationAnalysis(await analyzeRunOptimization(runId)); } catch (_) {} }}
+                    className="text-xs bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-400 px-3 py-1.5 rounded border border-cyan-500/30 transition-colors">
+                    Load Analysis
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {optimizationAnalysis.scorecard?.scores?.efficiency != null && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-mc-dim">Efficiency:</span>
+                      <div className="flex-1 h-1.5 bg-mc-raise rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${optimizationAnalysis.scorecard.scores.efficiency > 0.7 ? "bg-green-500" : optimizationAnalysis.scorecard.scores.efficiency > 0.4 ? "bg-yellow-500" : "bg-red-500"}`}
+                          style={{ width: `${(optimizationAnalysis.scorecard.scores.efficiency * 100)}%` }} />
+                      </div>
+                      <span className="text-[10px] font-mono text-mc-mute">{(optimizationAnalysis.scorecard.scores.efficiency * 100).toFixed(0)}%</span>
+                    </div>
+                  )}
+                  {optimizationAnalysis.scorecard?.scores?.safety != null && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-mc-dim">Safety:</span>
+                      <div className="flex-1 h-1.5 bg-mc-raise rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${optimizationAnalysis.scorecard.scores.safety > 0.8 ? "bg-green-500" : optimizationAnalysis.scorecard.scores.safety > 0.5 ? "bg-yellow-500" : "bg-red-500"}`}
+                          style={{ width: `${(optimizationAnalysis.scorecard.scores.safety * 100)}%` }} />
+                      </div>
+                      <span className="text-[10px] font-mono text-mc-mute">{(optimizationAnalysis.scorecard.scores.safety * 100).toFixed(0)}%</span>
+                    </div>
+                  )}
+                  {optimizationAnalysis.violation_rate != null && (
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-mc-dim">Violation rate</span>
+                      <span className="text-mc-ink/85 font-mono">{(optimizationAnalysis.violation_rate * 100).toFixed(1)}%</span>
+                    </div>
+                  )}
+                  {optimizationAnalysis.governance_led && (
+                    <div className="text-[10px] text-emerald-400/80 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">Governance-led optimization</div>
+                  )}
+                  {optimizationAnalysis.recommendations?.length > 0 && (
+                    <div className="space-y-1 mt-1">
+                      <div className="text-[10px] text-mc-dim font-semibold">Recommendations</div>
+                      {optimizationAnalysis.recommendations.map((r: any, i: number) => (
+                        <div key={i} className="text-[10px] bg-cyan-500/10 border border-cyan-500/20 rounded px-2 py-1 text-cyan-300">
+                          <span className="font-semibold">{r.param}</span> → {r.direction}: {r.reason}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {optimizationAnalysis.recommendations?.length === 0 && (
+                    <div className="text-[10px] text-green-400/70">All parameters within optimal bounds</div>
+                  )}
+                </div>
+              )}
+            </CollapsibleCard>
+            )}
+
+            {/* Divergence Explanation (#20) */}
+            {!isFullscreen && (
+            <CollapsibleCard title="🔀 Divergence Explanation" defaultOpen={true}
+              hint={divergenceExplanation ? (divergenceExplanation.divergence_detected ? <span className="text-yellow-400">⚠ Diverged · {divergenceExplanation.max_deviation?.toFixed?.(1) || "?"}m</span> : <span className="text-green-400">✓ On Track</span>) : <span className="text-mc-dim">Click to analyze</span>}>
+              <div className="space-y-2">
+                {divergenceExplanation ? (
+                  <>
+                    {divergenceExplanation.divergence_detected != null && (
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${
+                        divergenceExplanation.divergence_detected ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/30" : "bg-green-500/15 text-green-400 border-green-500/30"
+                      }`}>
+                        {divergenceExplanation.divergence_detected ? "⚠ Divergence Detected" : "✓ On Track"}
+                      </span>
+                    )}
+                    {divergenceExplanation.explanation && (
+                      <div className="text-[10px] text-mc-ink/85 bg-mc-bg/60 rounded p-2 whitespace-pre-wrap">{divergenceExplanation.explanation}</div>
+                    )}
+                    {divergenceExplanation.max_deviation != null && (
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-mc-dim">Max deviation</span>
+                        <span className="font-mono text-mc-ink/85">{divergenceExplanation.max_deviation?.toFixed?.(2) || divergenceExplanation.max_deviation}m</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <button onClick={async () => { try { setDivergenceExplanation(await getDivergenceExplanation(runId)); } catch (_) {} }}
+                    className="w-full text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition">
+                    Analyze Path Divergence
+                  </button>
+                )}
+              </div>
+            </CollapsibleCard>
+            )}
+            </>)}
+            </div>
+          </div>
 
           {/* AI Planner (compact, fullscreen only — under Chain-of-Trust) */}
           {isFullscreen && (
@@ -1499,7 +1730,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 { key: "executing", label: "Exec" },
                 { key: "done", label: "Done" },
               ] as const).map((st) => (
-                <div key={st.key} className={`text-[9px] px-1.5 py-0.5 rounded-full border ${pipelineStage === st.key || (st.key === "planning" && pipelineStage === "reasoning") || (st.key === "executing" && pipelineStage === "ready") ? "bg-purple-500 text-white border-purple-600" : "bg-slate-800 text-slate-500 border-slate-700"}`}>
+                <div key={st.key} className={`text-[9px] px-1.5 py-0.5 rounded-full border ${pipelineStage === st.key || (st.key === "planning" && pipelineStage === "reasoning") || (st.key === "executing" && pipelineStage === "ready") ? "bg-purple-500 text-white border-purple-600" : "bg-mc-panel text-mc-dim border-mc-line"}`}>
                   {st.label}
                 </div>
               ))}
@@ -1518,15 +1749,15 @@ export default function RunPage({ params }: { params: { runId: string } }) {
             {/* Reasoning summary */}
             {agenticResult && (
               <div className="space-y-1.5 mb-2">
-                <div className="text-[9px] uppercase tracking-wide text-slate-500 font-semibold">Reasoning</div>
-                <div className="bg-slate-900/60 border border-purple-500/20 rounded p-2 space-y-1 text-[10px] font-mono">
+                <div className="text-[9px] uppercase tracking-wide text-mc-dim font-semibold">Reasoning</div>
+                <div className="bg-mc-bg/60 border border-purple-500/20 rounded p-2 space-y-1 text-[10px] font-mono">
                   <div className="flex items-start gap-1">
                     <span className="text-purple-400 font-bold min-w-[50px]">Goal:</span>
                     <span className="text-white truncate">{missionInstruction || "—"}</span>
                   </div>
                   <div className="flex items-start gap-1">
                     <span className="text-emerald-400 font-bold min-w-[50px]">Strategy:</span>
-                    <div className="text-slate-300">
+                    <div className="text-mc-ink/85">
                       {(agenticResult.thought_chain || []).filter((s: any) => s.thought && s.action !== "replan").slice(0, 2).map((s: any, i: number) => (
                         <div key={i} className="truncate">- {s.thought}</div>
                       ))}
@@ -1534,36 +1765,36 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-yellow-400 font-bold min-w-[70px]">Confidence:</span>
-                    {(() => { const r = agenticResult.governance?.risk_score ?? 0; const c = Math.max(0, Math.min(1, (1-r)*0.92+0.04)); return <><span className={`font-bold ${c>0.7?"text-green-400":"text-yellow-400"}`}>{(c*100).toFixed(0)}%</span><div className="flex-1 h-1 bg-slate-700 rounded-full ml-1"><div className={`h-full rounded-full ${c>0.7?"bg-green-500":"bg-yellow-500"}`} style={{width:`${c*100}%`}}/></div></>; })()}
+                    {(() => { const r = agenticResult.governance?.risk_score ?? 0; const c = Math.max(0, Math.min(1, (1-r)*0.92+0.04)); return <><span className={`font-bold ${c>0.7?"text-green-400":"text-yellow-400"}`}>{(c*100).toFixed(0)}%</span><div className="flex-1 h-1 bg-mc-raise rounded-full ml-1"><div className={`h-full rounded-full ${c>0.7?"bg-green-500":"bg-yellow-500"}`} style={{width:`${c*100}%`}}/></div></>; })()}
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-red-400 font-bold min-w-[70px]">Gov Risk:</span>
-                    {(() => { const r = agenticResult.governance?.risk_score ?? 0; return <><span className={`font-bold ${r>0.5?"text-red-400":"text-green-400"}`}>{(r*100).toFixed(0)}%</span><div className="flex-1 h-1 bg-slate-700 rounded-full ml-1"><div className={`h-full rounded-full ${r>0.5?"bg-red-500":"bg-green-500"}`} style={{width:`${r*100}%`}}/></div></>; })()}
+                    {(() => { const r = agenticResult.governance?.risk_score ?? 0; return <><span className={`font-bold ${r>0.5?"text-red-400":"text-green-400"}`}>{(r*100).toFixed(0)}%</span><div className="flex-1 h-1 bg-mc-raise rounded-full ml-1"><div className={`h-full rounded-full ${r>0.5?"bg-red-500":"bg-green-500"}`} style={{width:`${r*100}%`}}/></div></>; })()}
                   </div>
                 </div>
-                {agenticResult.model_used && <div className="text-[9px] text-slate-600 font-mono">Model: {agenticResult.model_used}</div>}
+                {agenticResult.model_used && <div className="text-[9px] text-mc-dim font-mono">Model: {agenticResult.model_used}</div>}
               </div>
             )}
 
             {/* Auto-pilot reasoning */}
             {!agenticResult && llmPlan && (
               <div className="space-y-1.5 mb-2">
-                <div className="text-[9px] uppercase tracking-wide text-slate-500 font-semibold">AI Reasoning</div>
-                <div className="bg-slate-900/60 border border-cyan-500/20 rounded p-2 space-y-1 text-[10px] font-mono">
+                <div className="text-[9px] uppercase tracking-wide text-mc-dim font-semibold">AI Reasoning</div>
+                <div className="bg-mc-bg/60 border border-cyan-500/20 rounded p-2 space-y-1 text-[10px] font-mono">
                   <div className="flex items-start gap-1">
                     <span className="text-purple-400 font-bold min-w-[50px]">Goal:</span>
                     <span className="text-white truncate">{missionInstruction || mission?.title || "—"}</span>
                   </div>
                   <div className="flex items-start gap-1">
                     <span className="text-emerald-400 font-bold min-w-[50px]">Strategy:</span>
-                    <span className="text-slate-300 truncate">{llmPlan.rationale || "Direct path with obstacle avoidance"}</span>
+                    <span className="text-mc-ink/85 truncate">{llmPlan.rationale || "Direct path with obstacle avoidance"}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-yellow-400 font-bold min-w-[70px]">Confidence:</span>
-                    {(() => { const r = lastDecision?.governance?.risk_score ?? 0.15; const c = Math.max(0, Math.min(1, (1-r)*0.92+0.04)); return <><span className={`font-bold ${c>0.7?"text-green-400":"text-yellow-400"}`}>{(c*100).toFixed(0)}%</span><div className="flex-1 h-1 bg-slate-700 rounded-full ml-1"><div className={`h-full rounded-full ${c>0.7?"bg-green-500":"bg-yellow-500"}`} style={{width:`${c*100}%`}}/></div></>; })()}
+                    {(() => { const r = lastDecision?.governance?.risk_score ?? 0.15; const c = Math.max(0, Math.min(1, (1-r)*0.92+0.04)); return <><span className={`font-bold ${c>0.7?"text-green-400":"text-yellow-400"}`}>{(c*100).toFixed(0)}%</span><div className="flex-1 h-1 bg-mc-raise rounded-full ml-1"><div className={`h-full rounded-full ${c>0.7?"bg-green-500":"bg-yellow-500"}`} style={{width:`${c*100}%`}}/></div></>; })()}
                   </div>
                 </div>
-                {llmPlan.model && <div className="text-[9px] text-slate-600 font-mono">Model: {llmPlan.model}</div>}
+                {llmPlan.model && <div className="text-[9px] text-mc-dim font-mono">Model: {llmPlan.model}</div>}
               </div>
             )}
 
@@ -1574,7 +1805,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                   <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${llmPlan.all_approved === false ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" : "bg-green-500/20 text-green-400 border-green-500/30"}`}>
                     {llmPlan.all_approved === true ? "All Approved" : llmPlan.all_approved === false ? "Flagged" : missionReview?.verdict === "APPROVED" ? "MoveProof Approved" : "Under Review"}
                   </span>
-                  <span className="text-[9px] text-slate-500">{llmPlan.waypoints?.length || 0} waypoints</span>
+                  <span className="text-[9px] text-mc-dim">{llmPlan.waypoints?.length || 0} waypoints</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {(llmPlan.waypoints || []).map((wp: any, i: number) => {
@@ -1594,11 +1825,11 @@ export default function RunPage({ params }: { params: { runId: string } }) {
 
             {/* Planning progress */}
             {planningSteps.length > 0 && (currentStatus === "planning" || currentStatus === "running") && (
-              <div className="bg-slate-900/60 border border-slate-700 rounded p-2 mb-2 space-y-1">
-                <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Progress</div>
+              <div className="bg-mc-bg/60 border border-mc-line rounded p-2 mb-2 space-y-1">
+                <div className="text-[9px] uppercase tracking-wider text-mc-dim font-semibold">Progress</div>
                 {planningSteps.slice(-4).map((s, i) => {
                   const icon = s.step === "llm_start" ? "🧠" : s.step === "llm_done" ? "✅" : s.step === "governance_start" ? "🛡️" : "•";
-                  return <div key={i} className="flex items-start gap-1 text-[9px] text-slate-400"><span>{icon}</span><span className="truncate">{s.message}</span></div>;
+                  return <div key={i} className="flex items-start gap-1 text-[9px] text-mc-mute"><span>{icon}</span><span className="truncate">{s.message}</span></div>;
                 })}
               </div>
             )}
@@ -1612,216 +1843,15 @@ export default function RunPage({ params }: { params: { runId: string } }) {
           </Card>
           )}
 
-          {/* Alerts */}
-          {!isFullscreen && (
-          <Card title="Alerts">
-            {alerts.length === 0 ? (
-              <div className="text-xs text-slate-500 space-y-1">
-                <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/10 rounded px-2 py-1">
-                  <span className="text-green-400 text-[10px]">●</span>
-                  <span className="text-[10px] text-slate-500 font-mono mr-1">PWR</span>
-                  <span className="text-slate-400">Battery at 96% — normal operating range</span>
-                </div>
-                <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/10 rounded px-2 py-1">
-                  <span className="text-green-400 text-[10px]">●</span>
-                  <span className="text-[10px] text-slate-500 font-mono mr-1">NAV</span>
-                  <span className="text-slate-400">Path deviation 0.12m — within ±0.5m tolerance</span>
-                </div>
-                <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/10 rounded px-2 py-1">
-                  <span className="text-green-400 text-[10px]">●</span>
-                  <span className="text-[10px] text-slate-500 font-mono mr-1">SEN</span>
-                  <span className="text-slate-400">Motor temp 42°C — below 65°C threshold</span>
-                </div>
-                <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/10 rounded px-2 py-1">
-                  <span className="text-green-400 text-[10px]">●</span>
-                  <span className="text-[10px] text-slate-500 font-mono mr-1">COM</span>
-                  <span className="text-slate-400">Position update latency 12ms — below 100ms threshold</span>
-                </div>
-              </div>
-            ) : (
-              <ul className="space-y-1 max-h-40 overflow-y-auto">
-                {alerts.map((a, i) => {
-                  const msg = a.event || JSON.stringify(a);
-                  const category = msg.toLowerCase().includes("path") ? "NAV"
-                    : msg.toLowerCase().includes("speed") || msg.toLowerCase().includes("motor") ? "SEN"
-                    : msg.toLowerCase().includes("human") || msg.toLowerCase().includes("proximity") ? "SAF"
-                    : msg.toLowerCase().includes("battery") || msg.toLowerCase().includes("power") ? "PWR"
-                    : msg.toLowerCase().includes("latency") || msg.toLowerCase().includes("stale") ? "COM"
-                    : "SYS";
-                  return (
-                    <li key={i} className="flex items-start gap-1.5 text-xs bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5">
-                      <span className="text-red-400">⚠️</span>
-                      <span className="text-[10px] text-red-400/70 font-mono min-w-[24px]">{category}</span>
-                      <span className="text-slate-300">{msg}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
-          )}
-
-          {/* Scorecard (#10) */}
-          {!isFullscreen && (
-          <CollapsibleCard title="📊 Performance Scorecard" defaultOpen={true}
-            hint={<span className="text-slate-400">5 dimensions tracked</span>}>
-            <ScoreCard runId={runId} />
-          </CollapsibleCard>
-          )}
-
-          {/* Agent Introspection (#20) */}
-          {!isFullscreen && (
-          <CollapsibleCard title="🔍 Agent Introspection" defaultOpen={true}
-            hint={replanCount > 0 ? <span className="text-amber-400">{replanCount} replans · {lastDenialPolicy || "policy hit"}</span> : <span className="text-green-400">No denials</span>}>
-            <IntrospectionPanel runId={runId} />
-          </CollapsibleCard>
-          )}
-
-          {/* Safety Report (#14) */}
-          {!isFullscreen && (
-          <CollapsibleCard title="🛡️ Safety Report" defaultOpen={false}
-            hint={safetyReport ? <span className={safetyReport.verdict === "PASS" ? "text-green-400" : "text-red-400"}>{safetyReport.verdict === "PASS" ? "✓ PASS" : safetyReport.verdict === "FAIL" ? "✗ FAIL" : "⚠ " + safetyReport.verdict} · {safetyReport.checks_run || 0} checks</span> : <span className="text-slate-500">Awaiting data</span>}>
-            {!safetyReport ? (
-              <div className="text-xs text-slate-500 text-center py-2">No safety report yet</div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs font-bold px-2 py-1 rounded-full border ${
-                    safetyReport.verdict === "PASS" ? "bg-green-500/15 text-green-400 border-green-500/30" :
-                    safetyReport.verdict === "FAIL" ? "bg-red-500/15 text-red-400 border-red-500/30" :
-                    "bg-yellow-500/15 text-yellow-400 border-yellow-500/30"
-                  }`}>
-                    {safetyReport.verdict === "PASS" ? "✓ PASS" : safetyReport.verdict === "FAIL" ? "✗ FAIL" : "⚠ " + (safetyReport.verdict || "N/A")}
-                  </span>
-                  <span className="text-[10px] text-slate-500">{safetyReport.checks_run || 0} checks</span>
-                </div>
-                {safetyReport.violations?.length > 0 && (
-                  <div className="space-y-1">
-                    {safetyReport.violations.map((v: any, i: number) => (
-                      <div key={i} className="text-[10px] bg-red-500/10 border border-red-500/20 rounded px-2 py-1 text-red-300">
-                        <span className="font-bold">{v.check || v.name}</span>: {v.detail || v.message || "threshold exceeded"}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {safetyReport.thresholds && (
-                  <div className="text-[10px] text-slate-500 space-y-0.5">
-                    {Object.entries(safetyReport.thresholds).map(([k, v]) => (
-                      <div key={k} className="flex justify-between">
-                        <span>{k.replace(/_/g, " ")}</span>
-                        <span className="font-mono text-slate-400">{String(v)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {safetyReport.summary && <div className="text-[10px] text-slate-400 bg-slate-900/60 rounded p-2">{safetyReport.summary}</div>}
-              </div>
-            )}
-          </CollapsibleCard>
-          )}
-
-          {/* Optimization Analysis (#7) */}
-          {!isFullscreen && (
-          <CollapsibleCard title="⚡ Optimization Analysis" defaultOpen={false}
-            hint={optimizationAnalysis ? <span className="text-cyan-400">Eff: {((optimizationAnalysis.scorecard?.scores?.efficiency ?? 0) * 100).toFixed(0)}% · Safety: {((optimizationAnalysis.scorecard?.scores?.safety ?? 0) * 100).toFixed(0)}%</span> : <span className="text-slate-500">Click to load</span>}>
-            {!optimizationAnalysis ? (
-              <div className="text-center py-2">
-                <button onClick={async () => { try { setOptimizationAnalysis(await analyzeRunOptimization(runId)); } catch (_) {} }}
-                  className="text-xs bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-400 px-3 py-1.5 rounded border border-cyan-500/30 transition-colors">
-                  Load Analysis
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {optimizationAnalysis.scorecard?.scores?.efficiency != null && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500">Efficiency:</span>
-                    <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${optimizationAnalysis.scorecard.scores.efficiency > 0.7 ? "bg-green-500" : optimizationAnalysis.scorecard.scores.efficiency > 0.4 ? "bg-yellow-500" : "bg-red-500"}`}
-                        style={{ width: `${(optimizationAnalysis.scorecard.scores.efficiency * 100)}%` }} />
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-400">{(optimizationAnalysis.scorecard.scores.efficiency * 100).toFixed(0)}%</span>
-                  </div>
-                )}
-                {optimizationAnalysis.scorecard?.scores?.safety != null && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500">Safety:</span>
-                    <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${optimizationAnalysis.scorecard.scores.safety > 0.8 ? "bg-green-500" : optimizationAnalysis.scorecard.scores.safety > 0.5 ? "bg-yellow-500" : "bg-red-500"}`}
-                        style={{ width: `${(optimizationAnalysis.scorecard.scores.safety * 100)}%` }} />
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-400">{(optimizationAnalysis.scorecard.scores.safety * 100).toFixed(0)}%</span>
-                  </div>
-                )}
-                {optimizationAnalysis.violation_rate != null && (
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-slate-500">Violation rate</span>
-                    <span className="text-slate-300 font-mono">{(optimizationAnalysis.violation_rate * 100).toFixed(1)}%</span>
-                  </div>
-                )}
-                {optimizationAnalysis.governance_led && (
-                  <div className="text-[10px] text-emerald-400/80 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">Governance-led optimization</div>
-                )}
-                {optimizationAnalysis.recommendations?.length > 0 && (
-                  <div className="space-y-1 mt-1">
-                    <div className="text-[10px] text-slate-500 font-semibold">Recommendations</div>
-                    {optimizationAnalysis.recommendations.map((r: any, i: number) => (
-                      <div key={i} className="text-[10px] bg-cyan-500/10 border border-cyan-500/20 rounded px-2 py-1 text-cyan-300">
-                        <span className="font-semibold">{r.param}</span> → {r.direction}: {r.reason}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {optimizationAnalysis.recommendations?.length === 0 && (
-                  <div className="text-[10px] text-green-400/70">All parameters within optimal bounds</div>
-                )}
-              </div>
-            )}
-          </CollapsibleCard>
-          )}
-
-          {/* Divergence Explanation (#20) */}
-          {!isFullscreen && (
-          <CollapsibleCard title="🔀 Divergence Explanation" defaultOpen={true}
-            hint={divergenceExplanation ? (divergenceExplanation.divergence_detected ? <span className="text-yellow-400">⚠ Diverged · {divergenceExplanation.max_deviation?.toFixed?.(1) || "?"}m</span> : <span className="text-green-400">✓ On Track</span>) : <span className="text-slate-500">Click to analyze</span>}>
-            <div className="space-y-2">
-              {divergenceExplanation ? (
-                <>
-                  {divergenceExplanation.divergence_detected != null && (
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${
-                      divergenceExplanation.divergence_detected ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/30" : "bg-green-500/15 text-green-400 border-green-500/30"
-                    }`}>
-                      {divergenceExplanation.divergence_detected ? "⚠ Divergence Detected" : "✓ On Track"}
-                    </span>
-                  )}
-                  {divergenceExplanation.explanation && (
-                    <div className="text-[10px] text-slate-300 bg-slate-900/60 rounded p-2 whitespace-pre-wrap">{divergenceExplanation.explanation}</div>
-                  )}
-                  {divergenceExplanation.max_deviation != null && (
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-slate-500">Max deviation</span>
-                      <span className="font-mono text-slate-300">{divergenceExplanation.max_deviation?.toFixed?.(2) || divergenceExplanation.max_deviation}m</span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <button onClick={async () => { try { setDivergenceExplanation(await getDivergenceExplanation(runId)); } catch (_) {} }}
-                  className="w-full text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition">
-                  Analyze Path Divergence
-                </button>
-              )}
-            </div>
-          </CollapsibleCard>
-          )}
         </div>
       </div>
 
       {/* ── AI Intelligence Console (tabbed, below main layout) ── */}
-      <CollapsibleCard title="🧠 AI Intelligence Console — Scene Analysis, Telemetry Insights & Failure Detection" defaultOpen={true}>
+      <CollapsibleCard title="AI Intelligence Console: scene analysis, telemetry insights, failure detection" defaultOpen={false}>
         <div className="flex gap-1 mb-3">
           {(["scene", "telemetry", "failure"] as const).map((tab) => (
             <button key={tab} onClick={() => setAiTab(tab)}
-              className={`text-xs font-medium px-3 py-1.5 rounded-lg transition ${aiTab === tab ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "text-slate-400 hover:text-slate-300 hover:bg-slate-700/50"}`}>
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg transition ${aiTab === tab ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "text-mc-mute hover:text-mc-ink/85 hover:bg-mc-raise/50"}`}>
               {tab === "scene" ? "🔍 Scene" : tab === "telemetry" ? "📊 Telemetry" : "⚠️ Failures"}
             </button>
           ))}
@@ -1830,7 +1860,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
         {aiTab === "scene" && (
           <div>
             <button onClick={onAnalyzeScene} disabled={sceneLoading}
-              className="w-full bg-indigo-500/80 hover:bg-indigo-600 disabled:bg-slate-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition mb-2">
+              className="w-full bg-indigo-500/80 hover:bg-indigo-600 disabled:bg-mc-line2 text-white text-xs font-semibold px-4 py-2 rounded-lg transition mb-2">
               {sceneLoading ? "Analyzing..." : "Analyze Current Scene"}
             </button>
             {sceneError && <div className="text-xs text-red-400 bg-red-500/10 rounded p-2 mb-2">{sceneError}</div>}
@@ -1839,22 +1869,22 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 {sceneResult.hazards?.length > 0 && sceneResult.hazards.map((h: any, i: number) => (
                   <div key={i} className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded p-2">
                     <span className={`font-bold ${h.severity === "high" ? "text-red-400" : "text-yellow-400"}`}>{(h.severity || "?").toUpperCase()}</span>
-                    <span className="text-slate-300">{h.type || h.description}</span>
+                    <span className="text-mc-ink/85">{h.type || h.description}</span>
                   </div>
                 ))}
                 {sceneResult.risk_score != null && (
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">Risk:</span>
-                    <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <span className="text-mc-dim">Risk:</span>
+                    <div className="flex-1 h-1.5 bg-mc-raise rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${sceneResult.risk_score > 0.7 ? "bg-red-500" : sceneResult.risk_score > 0.3 ? "bg-yellow-500" : "bg-green-500"}`}
                         style={{ width: `${(sceneResult.risk_score * 100)}%` }} />
                     </div>
-                    <span className="font-mono text-slate-400">{(sceneResult.risk_score * 100).toFixed(0)}%</span>
+                    <span className="font-mono text-mc-mute">{(sceneResult.risk_score * 100).toFixed(0)}%</span>
                   </div>
                 )}
-                {sceneResult.recommended_action && <div className="bg-indigo-500/10 border border-indigo-500/20 rounded p-2 text-slate-300">{sceneResult.recommended_action}</div>}
-                {sceneResult.analysis && <div className="bg-slate-900/60 rounded p-2 max-h-28 overflow-y-auto text-slate-300 whitespace-pre-wrap">{sceneResult.analysis}</div>}
-                {sceneResult.model && <div className="text-[10px] text-slate-600 font-mono">Model: {sceneResult.model}</div>}
+                {sceneResult.recommended_action && <div className="bg-indigo-500/10 border border-indigo-500/20 rounded p-2 text-mc-ink/85">{sceneResult.recommended_action}</div>}
+                {sceneResult.analysis && <div className="bg-mc-bg/60 rounded p-2 max-h-28 overflow-y-auto text-mc-ink/85 whitespace-pre-wrap">{sceneResult.analysis}</div>}
+                {sceneResult.model && <div className="text-[10px] text-mc-dim font-mono">Model: {sceneResult.model}</div>}
               </div>
             )}
           </div>
@@ -1863,22 +1893,22 @@ export default function RunPage({ params }: { params: { runId: string } }) {
         {aiTab === "telemetry" && (
           <div>
             <button onClick={onAnalyzeTelemetry} disabled={telAnalysisLoading || events.length === 0}
-              className="w-full bg-teal-500/80 hover:bg-teal-600 disabled:bg-slate-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition mb-2">
+              className="w-full bg-teal-500/80 hover:bg-teal-600 disabled:bg-mc-line2 text-white text-xs font-semibold px-4 py-2 rounded-lg transition mb-2">
               {telAnalysisLoading ? "Analyzing..." : "Analyze Telemetry"}
             </button>
             {telAnalysisError && <div className="text-xs text-red-400 bg-red-500/10 rounded p-2 mb-2">{telAnalysisError}</div>}
             {telAnalysis && (
               <div className="space-y-2 text-xs">
-                {telAnalysis.summary && <div className="bg-slate-900/60 rounded p-2 max-h-28 overflow-y-auto text-slate-300 whitespace-pre-wrap">{telAnalysis.summary}</div>}
+                {telAnalysis.summary && <div className="bg-mc-bg/60 rounded p-2 max-h-28 overflow-y-auto text-mc-ink/85 whitespace-pre-wrap">{telAnalysis.summary}</div>}
                 {telAnalysis.anomalies?.length > 0 && telAnalysis.anomalies.map((a: any, i: number) => (
-                  <div key={i} className="bg-yellow-500/10 border border-yellow-500/20 rounded p-2 text-slate-300">{a.description || a.type}</div>
+                  <div key={i} className="bg-yellow-500/10 border border-yellow-500/20 rounded p-2 text-mc-ink/85">{a.description || a.type}</div>
                 ))}
                 {telAnalysis.recommendations && (
-                  <div className="bg-teal-500/10 border border-teal-500/20 rounded p-2 text-slate-300 whitespace-pre-wrap">
+                  <div className="bg-teal-500/10 border border-teal-500/20 rounded p-2 text-mc-ink/85 whitespace-pre-wrap">
                     {Array.isArray(telAnalysis.recommendations) ? telAnalysis.recommendations.join("\n") : telAnalysis.recommendations}
                   </div>
                 )}
-                {telAnalysis.model && <div className="text-[10px] text-slate-600 font-mono">Model: {telAnalysis.model}</div>}
+                {telAnalysis.model && <div className="text-[10px] text-mc-dim font-mono">Model: {telAnalysis.model}</div>}
               </div>
             )}
           </div>
@@ -1887,7 +1917,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
         {aiTab === "failure" && (
           <div>
             <button onClick={onDetectFailures} disabled={failureLoading || events.length === 0}
-              className="w-full bg-orange-500/80 hover:bg-orange-600 disabled:bg-slate-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition mb-2">
+              className="w-full bg-orange-500/80 hover:bg-orange-600 disabled:bg-mc-line2 text-white text-xs font-semibold px-4 py-2 rounded-lg transition mb-2">
               {failureLoading ? "Detecting..." : "Run Failure Analysis"}
             </button>
             {failureError && <div className="text-xs text-red-400 bg-red-500/10 rounded p-2 mb-2">{failureError}</div>}
@@ -1899,15 +1929,15 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                 {failureResult.failures?.map((f: any, i: number) => (
                   <div key={i} className="bg-red-500/10 border border-red-500/20 rounded p-2">
                     <span className="font-bold text-red-400">{f.type}</span> <span className="text-[10px] bg-red-700 text-white px-1 rounded">{f.severity}</span>
-                    <div className="text-slate-300 mt-1">{f.description}</div>
+                    <div className="text-mc-ink/85 mt-1">{f.description}</div>
                   </div>
                 ))}
                 {failureResult.preventive_actions && (
-                  <div className="bg-orange-500/10 border border-orange-500/20 rounded p-2 text-slate-300 whitespace-pre-wrap">
+                  <div className="bg-orange-500/10 border border-orange-500/20 rounded p-2 text-mc-ink/85 whitespace-pre-wrap">
                     {Array.isArray(failureResult.preventive_actions) ? failureResult.preventive_actions.join("\n") : failureResult.preventive_actions}
                   </div>
                 )}
-                {failureResult.model && <div className="text-[10px] text-slate-600 font-mono">Model: {failureResult.model}</div>}
+                {failureResult.model && <div className="text-[10px] text-mc-dim font-mono">Model: {failureResult.model}</div>}
               </div>
             )}
           </div>

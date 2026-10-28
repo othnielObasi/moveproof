@@ -1,407 +1,338 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
-import { listPolicies, testPolicy, getPolicyVersions, getPolicyClassification, runAdversarialValidation } from "@/lib/api";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  getActivePolicies, getLessons, getPolicyActivations, getPolicyProposals, getTuningRecommendations,
+  listPolicies, testPolicy,
+} from "@/lib/api";
+import { Button, Empty, KV, Mono, Notice, Page, PageHeader, Panel, Pill, Tabs, Verdict, cx } from "@/components/ui";
 
-interface Policy {
-  policy_id: string;
-  name: string;
-  description: string;
-  severity: string;
-}
+type Policy = { policy_id: string; name: string; description: string; severity: string; parameters?: Record<string, any>; trigger?: string; action?: string };
+type TabId = "policies" | "rules" | "learning" | "sandbox";
 
-interface GovernanceResult {
-  decision: string;
-  policy_hits: string[];
-  reasons: string[];
-  required_action?: string;
-  risk_score: number;
-}
-
-const PRESETS = [
-  {
-    label: "🟢 Safe — No human nearby",
-    telemetry: { x: 14, y: 7, zone: "aisle", nearest_obstacle_m: 2.0, human_detected: false, human_conf: 0.0 },
-    proposal: { intent: "MOVE_TO", params: { x: 15, y: 7, max_speed: 0.5 }, rationale: "Safe movement" },
-  },
-  {
-    label: "🟡 Human nearby — Should slow",
-    telemetry: { x: 14, y: 7, zone: "aisle", nearest_obstacle_m: 1.5, human_detected: true, human_conf: 0.85, human_distance_m: 2.5 },
-    proposal: { intent: "MOVE_TO", params: { x: 15, y: 7, max_speed: 0.8 }, rationale: "Approach target" },
-  },
-  {
-    label: "🔴 Critical — Human at 0.8m",
-    telemetry: { x: 14, y: 7, zone: "loading_bay", nearest_obstacle_m: 0.45, human_detected: true, human_conf: 0.95, human_distance_m: 0.8 },
-    proposal: { intent: "MOVE_TO", params: { x: 15, y: 7, max_speed: 0.8 }, rationale: "High speed near human" },
-  },
-  {
-    label: "🚧 Path blocked — Obstacle ahead",
-    telemetry: { x: 14, y: 7, zone: "aisle", nearest_obstacle_m: 0.3, human_detected: false, human_conf: 0.0 },
-    proposal: { intent: "MOVE_TO", params: { x: 14.5, y: 7, max_speed: 0.6 }, rationale: "Move through tight space" },
-  },
+const GROUPS: Array<{ title: string; ids: string[] }> = [
+  { title: "Where the robot may go", ids: ["GEOFENCE_01", "PATH_CLEARANCE_07", "OBSTACLE_CLEARANCE_03"] },
+  { title: "People and vehicles", ids: ["HUMAN_PROXIMITY_02", "HUMAN_CLEARANCE_02", "WORKER_PROXIMITY_06", "UNCERTAINTY_04"] },
+  { title: "Speed and hazards", ids: ["SAFE_SPEED_01", "HAZARD_EXCLUSION_08", "HAZARD_SLOW_09"] },
+  { title: "Escalation", ids: ["HITL_05"] },
 ];
 
-export default function PoliciesPage() {
-  const [policies, setPolicies] = useState<Policy[]>([]);
-  const [loadingPolicies, setLoadingPolicies] = useState(true);
-  const [telemetryText, setTelemetryText] = useState(
-    JSON.stringify(PRESETS[0].telemetry, null, 2)
-  );
-  const [proposalText, setProposalText] = useState(
-    JSON.stringify(PRESETS[0].proposal, null, 2)
-  );
-  const [jsonError, setJsonError] = useState<string | null>(null);
-  const [result, setResult] = useState<GovernanceResult | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
-
-  // Phase E: policy versions, classification, adversarial
-  const [policyVersions, setPolicyVersions] = useState<any[]>([]);
-  const [policyClassification, setPolicyClassification] = useState<any>(null);
-  const [adversarialResults, setAdversarialResults] = useState<any>(null);
-  const [adversarialLoading, setAdversarialLoading] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setPolicies(await listPolicies());
-      } catch (e: any) {
-        setErr("Failed to load policies");
-      } finally {
-        setLoadingPolicies(false);
-      }
-      // Phase E data
-      try { setPolicyVersions(await getPolicyVersions()); } catch (_) {}
-      try { setPolicyClassification(await getPolicyClassification()); } catch (_) {}
-    })();
-  }, []);
-
-  const onTest = useCallback(async () => {
-    setErr(null);
-    setJsonError(null);
-
-    let telemetry: any;
-    let proposal: any;
-    try {
-      telemetry = JSON.parse(telemetryText);
-    } catch {
-      setJsonError("Invalid JSON in Telemetry field");
-      return;
-    }
-    try {
-      proposal = JSON.parse(proposalText);
-    } catch {
-      setJsonError("Invalid JSON in Proposal field");
-      return;
-    }
-
-    setTesting(true);
-    try {
-      const r = await testPolicy({ telemetry, proposal });
-      setResult(r);
-    } catch (e: any) {
-      setErr(e.message || "Failed");
-    } finally {
-      setTesting(false);
-    }
-  }, [telemetryText, proposalText]);
-
-  const severityColor: Record<string, string> = {
-    HIGH: "bg-red-500/20 text-red-400 border-red-500/30",
-    MEDIUM: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    LOW: "bg-green-500/20 text-green-400 border-green-500/30",
-  };
-
-  const decisionColor: Record<string, string> = {
-    APPROVED: "text-green-400",
-    DENIED: "text-red-400",
-    NEEDS_REVIEW: "text-yellow-400",
-  };
-
+export default function GovernancePage() {
+  const [tab, setTabState] = useState<TabId>("policies");
+  const setTab = (id: string) => setTabState(id as TabId);
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Governance Policies</h1>
+    <Page wide>
+      <PageHeader eyebrow="Governance" title="The rules every move must pass"
+        subtitle="Eleven deterministic policies judge every proposal before the robot moves. The rules change only through a governed workflow; the planner learns from the gate, the gate does not drift." />
+      <Tabs className="mb-5" value={tab} onChange={setTab} tabs={[
+        { id: "policies", label: "Policies" },
+        { id: "rules", label: "Rules in force" },
+        { id: "learning", label: "What the planner learned" },
+        { id: "sandbox", label: "Test a move" },
+      ]} />
+      {tab === "policies" && <Policies />}
+      {tab === "rules" && <Rules />}
+      {tab === "learning" && <Learning />}
+      {tab === "sandbox" && <Sandbox />}
+    </Page>
+  );
+}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Active Policies */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-lg font-semibold mb-4">Active Policies</h2>
-          {loadingPolicies ? (
-            <div className="text-slate-400 py-4 text-center">Loading...</div>
-          ) : policies.length === 0 ? (
-            <div className="text-slate-400 py-4 text-center">No policies loaded</div>
-          ) : (
-            <div className="space-y-3">
-              {policies.map((p) => (
-                <div key={p.policy_id} className="p-3 bg-slate-700/50 rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono text-sm font-semibold text-cyan-400">{p.policy_id}</span>
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                        severityColor[p.severity] || severityColor.MEDIUM
-                      }`}
-                    >
-                      {p.severity}
-                    </span>
-                  </div>
-                  <div className="font-medium text-sm text-white">{p.name}</div>
-                  <div className="text-xs text-slate-400 mt-1">{p.description}</div>
+/* ── Policies ───────────────────────────────────────────────────────────── */
+
+function Policies() {
+  const [policies, setPolicies] = useState<Policy[] | null>(null);
+  useEffect(() => { listPolicies().then(setPolicies).catch(() => setPolicies([])); }, []);
+  if (!policies) return <div className="text-sm text-mc-dim">Loading policies…</div>;
+  const byId = Object.fromEntries(policies.map((p) => [p.policy_id, p]));
+  const grouped = new Set(GROUPS.flatMap((g) => g.ids));
+  const rest = policies.filter((p) => !grouped.has(p.policy_id));
+  return (
+    <div className="space-y-6">
+      {[...GROUPS, ...(rest.length ? [{ title: "Other", ids: rest.map((p) => p.policy_id) }] : [])].map((g) => (
+        <section key={g.title}>
+          <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-mc-dim mb-2.5">{g.title}</h2>
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {g.ids.map((id) => byId[id]).filter(Boolean).map((p) => (
+              <div key={p.policy_id} className="rounded-xl border border-mc-line bg-mc-panel p-4 flex flex-col">
+                <div className="flex items-start justify-between gap-2">
+                  <Mono>{p.policy_id}</Mono>
+                  <Pill tone={p.severity === "HIGH" ? "stop" : p.severity === "MEDIUM" ? "warn" : "neutral"}>{p.severity}</Pill>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Test Panel */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-lg font-semibold mb-4">Test Action Against Policies</h2>
-
-          {/* Preset Scenarios */}
-          <div className="mb-4">
-            <label className="text-xs text-slate-400 uppercase tracking-wider font-semibold block mb-2">Quick Scenarios</label>
-            <div className="grid grid-cols-2 gap-2">
-              {PRESETS.map((preset) => (
-                <button
-                  key={preset.label}
-                  onClick={() => {
-                    setTelemetryText(JSON.stringify(preset.telemetry, null, 2));
-                    setProposalText(JSON.stringify(preset.proposal, null, 2));
-                    setResult(null);
-                  }}
-                  className="text-left text-xs font-medium px-3 py-2 rounded-lg border border-slate-600 hover:border-cyan-500/40 hover:bg-slate-700/50 transition text-slate-300"
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {(err || jsonError) && (
-            <div className="bg-red-500/20 border-l-4 border-red-500 rounded-lg p-3 mb-4 text-sm text-red-400">
-              {jsonError || err}
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm text-slate-400 block mb-1">Telemetry (JSON)</label>
-              <textarea
-                value={telemetryText}
-                onChange={(e) => setTelemetryText(e.target.value)}
-                rows={6}
-                className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-green-400 font-mono focus:outline-none focus:border-cyan-500 resize-y"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-slate-400 block mb-1">Proposal (JSON)</label>
-              <textarea
-                value={proposalText}
-                onChange={(e) => setProposalText(e.target.value)}
-                rows={4}
-                className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-green-400 font-mono focus:outline-none focus:border-cyan-500 resize-y"
-              />
-            </div>
-
-            <button
-              onClick={onTest}
-              disabled={testing}
-              className="w-full bg-cyan-500 hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition"
-            >
-              {testing ? "Testing..." : "Test Policy"}
-            </button>
-          </div>
-
-          {result && (
-            <div className="mt-6 space-y-4">
-              {/* Decision banner */}
-              <div className={`flex items-center justify-between rounded-xl px-4 py-3 border ${
-                result.decision === "APPROVED" ? "bg-green-500/10 border-green-500/30" :
-                result.decision === "DENIED" ? "bg-red-500/10 border-red-500/30" :
-                "bg-yellow-500/10 border-yellow-500/30"
-              }`}>
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">
-                    {result.decision === "APPROVED" ? "✅" : result.decision === "DENIED" ? "❌" : "⚠️"}
-                  </span>
-                  <span className={`font-bold text-xl ${decisionColor[result.decision] || "text-white"}`}>
-                    {result.decision}
-                  </span>
-                </div>
-              </div>
-
-              {/* Risk Gauge */}
-              <div className="bg-slate-700/40 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-slate-400 font-medium">Risk Score</span>
-                  <span className={`text-2xl font-bold ${
-                    result.risk_score > 0.7 ? "text-red-400" : result.risk_score > 0.3 ? "text-yellow-400" : "text-green-400"
-                  }`}>{(result.risk_score * 100).toFixed(0)}%</span>
-                </div>
-                <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      result.risk_score > 0.7 ? "bg-gradient-to-r from-red-600 to-red-400" :
-                      result.risk_score > 0.3 ? "bg-gradient-to-r from-yellow-600 to-yellow-400" :
-                      "bg-gradient-to-r from-green-600 to-green-400"
-                    }`}
-                    style={{ width: `${Math.max(result.risk_score * 100, 2)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                  <span>Safe</span>
-                  <span>Caution</span>
-                  <span>Danger</span>
-                </div>
-              </div>
-
-              {/* Policy Hits */}
-              <div>
-                <span className="text-sm text-slate-400 font-medium">Policy Hits</span>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {result.policy_hits.length === 0 ? (
-                    <span className="text-sm text-green-400 bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-lg">✓ No policy violations</span>
-                  ) : (
-                    result.policy_hits.map((h) => (
-                      <span key={h} className="bg-red-500/15 text-red-400 text-sm font-mono px-3 py-1.5 rounded-lg border border-red-500/30 font-semibold">
-                        ✗ {h}
-                      </span>
-                    ))
+                <div className="mt-1.5 font-semibold">{p.name}</div>
+                <p className="mt-1 text-xs text-mc-mute leading-relaxed flex-1">{p.description}</p>
+                <div className="mt-3 pt-3 border-t border-mc-line/70 space-y-1 text-xs">
+                  {p.trigger && <div><span className="text-mc-dim">When </span><span className="text-mc-ink">{p.trigger}</span></div>}
+                  {p.action && <div><span className="text-mc-dim">Then </span><span className="text-mc-warn font-medium">{p.action}</span></div>}
+                  {p.parameters && Object.keys(p.parameters).length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {Object.entries(p.parameters).map(([k, v]) => (
+                        <span key={k} className="font-mono text-[10px] text-mc-mute bg-mc-raise border border-mc-line rounded px-1.5 py-0.5">{k}={String(v)}</span>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
 
-              {/* Reasons */}
-              {result.reasons.length > 0 && (
-                <div className="bg-slate-900/60 border border-slate-700 rounded-lg p-4">
-                  <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Reasons</span>
-                  <ul className="mt-2 text-sm text-slate-300 space-y-1.5">
-                    {result.reasons.map((r, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <span className="text-red-400 mt-0.5">•</span>
-                        <span>{r}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+/* ── Rules in force ─────────────────────────────────────────────────────── */
 
-              {/* Required Action */}
-              {result.required_action && (
-                <div className="bg-yellow-500/10 border-l-4 border-yellow-500 rounded-lg p-4">
-                  <span className="text-yellow-400 text-xs font-bold uppercase tracking-wider">Required Action</span>
-                  <div className="text-base text-yellow-300 mt-1 font-medium">{result.required_action}</div>
-                </div>
-              )}
+const WORKFLOW = [
+  ["Propose", "A named threshold change, inside hard bounds in code."],
+  ["Replay", "Every recorded decision re-judged under the candidate; one unsafe move allowed fails it."],
+  ["Benchmark", "Seeded scenarios under both rule sets; required for any relaxation."],
+  ["Approve", "A named person who is not the proposer."],
+  ["Activate", "Only between runs; append-only record; rollback any time."],
+];
+
+function Rules() {
+  const [active, setActive] = useState<any>(null);
+  const [activations, setActivations] = useState<any[]>([]);
+  const [proposals, setProposals] = useState<any[]>([]);
+  useEffect(() => {
+    getActivePolicies().then(setActive).catch(() => {});
+    getPolicyActivations().then((d: any) => setActivations(Array.isArray(d) ? d : d.activations || [])).catch(() => {});
+    getPolicyProposals().then((d: any) => setProposals(Array.isArray(d) ? d : d.proposals || [])).catch(() => {});
+  }, []);
+  const changeable = Object.entries(active?.changeable || {}) as Array<[string, any]>;
+  const value = (path: string) => path.split(".").reduce((o: any, k) => (o == null ? o : o[k]), active?.parameters);
+  return (
+    <div className="grid lg:grid-cols-3 gap-4">
+      <div className="lg:col-span-2 space-y-4">
+        <Panel title="Changeable thresholds" subtitle="Current value and the hard bounds in code no proposal can cross"
+          actions={active && <Pill tone={active.is_default ? "neutral" : "warn"}>version <Mono className="ml-1">{active.version}</Mono></Pill>}>
+          {!active ? <div className="text-xs text-mc-dim">Loading…</div> : (
+            <div className="overflow-x-auto mc-scroll">
+              <table className="w-full text-sm tabular">
+                <thead><tr className="text-[11px] uppercase tracking-wider text-mc-dim">
+                  <th className="text-left py-1.5">Threshold</th><th className="text-right px-2">Now</th><th className="text-right px-2">Bounds</th><th className="text-right px-2">Tighter is</th>
+                </tr></thead>
+                <tbody>
+                  {changeable.map(([k, spec]) => (
+                    <tr key={k} className="border-t border-mc-line/70">
+                      <td className="py-1.5"><Mono className="text-mc-ink">{k}</Mono></td>
+                      <td className="text-right px-2 text-mc-accent">{String(value(k) ?? "—")} {spec.unit || ""}</td>
+                      <td className="text-right px-2 text-mc-mute">{spec.min} – {spec.max}</td>
+                      <td className="text-right px-2 text-mc-mute">{spec.tighter}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Phase E: Policy Versions, Classification, Adversarial Validation */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-        {/* Policy Classification (#14) */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-lg font-semibold mb-4">Policy Classification</h2>
-          {!policyClassification ? (
-            <div className="text-slate-400 text-sm text-center py-4">Loading...</div>
+        </Panel>
+        <Panel title="Change history" subtitle="Every activation is an append-only record">
+          {activations.length === 0 && proposals.length === 0 ? (
+            <Empty title="Running on the default rules">No rule change has been proposed or activated on this deployment.</Empty>
           ) : (
-            <div className="space-y-2">
-              {policyClassification.categories ? (
-                Object.entries(policyClassification.categories).map(([cat, policies]: [string, any]) => (
-                  <div key={cat} className="bg-slate-700/50 rounded-lg p-3">
-                    <div className="text-sm font-semibold text-cyan-400 mb-1 capitalize">{cat.replace(/_/g, " ")}</div>
-                    <div className="flex flex-wrap gap-1">
-                      {(Array.isArray(policies) ? policies : []).map((p: any, i: number) => (
-                        <span key={i} className="text-[10px] bg-slate-600 text-slate-300 px-2 py-0.5 rounded font-mono">
-                          {typeof p === "string" ? p : p.policy_id || p.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-[10px] text-slate-400 bg-slate-900/60 rounded p-2 whitespace-pre-wrap">
-                  {JSON.stringify(policyClassification, null, 2)}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Policy Version History (#16) */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-lg font-semibold mb-4">Version History</h2>
-          {policyVersions.length === 0 ? (
-            <div className="text-slate-400 text-sm text-center py-4">No version history</div>
-          ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {policyVersions.map((v: any, i: number) => (
-                <div key={i} className="bg-slate-700/50 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-mono text-cyan-400">{v.policy_id || v.id}</span>
-                    <span className="text-[10px] bg-slate-600 text-slate-300 px-2 py-0.5 rounded">v{v.version || i + 1}</span>
-                  </div>
-                  {v.changed_at && <div className="text-[10px] text-slate-500">{new Date(v.changed_at).toLocaleString()}</div>}
-                  {v.change_reason && <div className="text-xs text-slate-400 mt-1">{v.change_reason}</div>}
-                  {v.diff_summary && <div className="text-[10px] text-amber-400 mt-1 font-mono">{v.diff_summary}</div>}
-                </div>
+            <ul className="divide-y divide-mc-line text-sm">
+              {[...proposals.map((p) => ({ ...p, _kind: "proposal" })), ...activations.map((a) => ({ ...a, _kind: "activation" }))].map((x: any, i) => (
+                <li key={i} className="py-2 flex flex-wrap items-center gap-2">
+                  <Pill tone={x._kind === "activation" ? "accent" : "neutral"}>{x._kind}</Pill>
+                  <Verdict value={x.status || x.action || "recorded"} />
+                  <span className="text-xs text-mc-mute">{x.description || x.note || JSON.stringify(x.changes || {})}</span>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-        </div>
+        </Panel>
+      </div>
+      <div className="space-y-4">
+        <Panel title="How rules change">
+          <ol className="space-y-2.5">
+            {WORKFLOW.map(([t, d], i) => (
+              <li key={t} className="flex gap-3">
+                <span className="font-mono text-xs text-mc-accent mt-0.5">{String(i + 1).padStart(2, "0")}</span>
+                <span><span className="text-sm font-semibold">{t}</span><span className="block text-xs text-mc-mute">{d}</span></span>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-3"><Notice tone="warn">Read-only on the public demo: everyone shares the same rules.</Notice></div>
+        </Panel>
+        <Panel title="Safety floors" subtitle="Fixed in code; label moves safe or unsafe in replay and benchmarks">
+          {active?.safety_floors ? Object.entries(active.safety_floors).filter(([k]) => k !== "geofence").map(([k, v]) => (
+            <KV key={k} k={k.replace(/_/g, " ")} v={String(v)} mono />
+          )) : <div className="text-xs text-mc-dim">Loading…</div>}
+        </Panel>
+      </div>
+    </div>
+  );
+}
 
-        {/* Adversarial Validation (#15) */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-lg font-semibold mb-4">Adversarial Validation</h2>
-          {!adversarialResults ? (
-            <div className="space-y-3">
-              <p className="text-sm text-slate-400">Run adversarial scenarios to test policy robustness.</p>
-              <button
-                onClick={async () => {
-                  setAdversarialLoading(true);
-                  try { setAdversarialResults(await runAdversarialValidation()); } catch (e: any) { setErr(e.message); }
-                  setAdversarialLoading(false);
-                }}
-                disabled={adversarialLoading}
-                className="w-full bg-red-500/80 hover:bg-red-600 disabled:bg-slate-600 text-white font-semibold py-2.5 rounded-lg transition text-sm"
-              >
-                {adversarialLoading ? "Running..." : "🔴 Run Adversarial Tests"}
-              </button>
-            </div>
+/* ── Learning ───────────────────────────────────────────────────────────── */
+
+function Learning() {
+  const [lessons, setLessons] = useState<any>(null);
+  const [tuning, setTuning] = useState<any>(null);
+  useEffect(() => {
+    getLessons().then(setLessons).catch(() => setLessons({ lessons: [] }));
+    getTuningRecommendations().then(setTuning).catch(() => {});
+  }, []);
+  const list: any[] = lessons?.lessons || [];
+  return (
+    <div className="grid lg:grid-cols-3 gap-4">
+      <Panel className="lg:col-span-2" padded={false}
+        title="Lessons the planner receives"
+        subtitle="Distilled only from the gate's own decisions; scoped to the rules version; advisory: the gate still judges every move"
+        actions={lessons && <Pill>{list.length} lessons · rules <Mono className="ml-1">{lessons.policy_version}</Mono></Pill>}>
+        {!lessons ? <div className="p-4 text-xs text-mc-dim">Loading…</div> : list.length === 0 ? (
+          <Empty title="No lessons yet">They appear after runs in which the gate denied moves.</Empty>
+        ) : (
+          <ul className="divide-y divide-mc-line max-h-[620px] overflow-y-auto mc-scroll">
+            {list.map((l) => (
+              <li key={l.id} className="px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Mono>L{l.id}</Mono>
+                  <Pill tone="stop">{l.policy}</Pill>
+                  <span className="text-xs text-mc-dim">{l.zone} · cell ({l.cell_x}, {l.cell_y}) · {l.denials} denials · {(l.runs || []).length} run{(l.runs || []).length === 1 ? "" : "s"}</span>
+                </div>
+                <p className="mt-1.5 text-sm text-mc-mute leading-relaxed">{l.text}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+      <div className="space-y-4">
+        <Panel title="How learning works">
+          <ol className="space-y-2.5 text-xs text-mc-mute">
+            <li><span className="text-mc-ink font-semibold">Distil.</span> After each run, denials are grouped by 2 m floor cell and policy, with the fastest speed the gate approved there.</li>
+            <li><span className="text-mc-ink font-semibold">Retrieve.</span> Before planning, up to 5 lessons within 4 m of the route go to Nemotron as advice.</li>
+            <li><span className="text-mc-ink font-semibold">Audit.</span> Each plan records the lessons that shaped it in the hash chain.</li>
+          </ol>
+        </Panel>
+        <Panel title="Tuning advice" subtitle="Recommend-only; a change still needs the governed workflow">
+          {!tuning ? <div className="text-xs text-mc-dim">Loading…</div> : (tuning.recommendations || []).length === 0 ? (
+            <div className="text-xs text-mc-dim">No recommendations yet.</div>
           ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`text-xs font-bold px-2 py-1 rounded-full border ${
-                  adversarialResults.all_passed ? "bg-green-500/15 text-green-400 border-green-500/30" : "bg-red-500/15 text-red-400 border-red-500/30"
-                }`}>
-                  {adversarialResults.all_passed ? "✓ All Passed" : "✗ Issues Found"}
-                </span>
-                <span className="text-[10px] text-slate-500">
-                  {adversarialResults.passed || 0}/{adversarialResults.total || 0} passed
-                </span>
-              </div>
-              <div className="space-y-1 max-h-60 overflow-y-auto">
-                {(adversarialResults.results || adversarialResults.scenarios || []).map((r: any, i: number) => (
-                  <div key={i} className={`text-[10px] rounded px-2 py-1.5 border ${
-                    r.passed ? "bg-green-500/10 border-green-500/20 text-green-300" : "bg-red-500/10 border-red-500/20 text-red-300"
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">{r.scenario_id || r.name || `Test ${i + 1}`}</span>
-                      <span>{r.passed ? "✓" : "✗"}</span>
-                    </div>
-                    {r.description && <div className="text-slate-400 mt-0.5">{r.description}</div>}
-                    {r.expected_decision && <div className="text-slate-500">Expected: {r.expected_decision} | Got: {r.actual_decision || "?"}</div>}
+            <ul className="space-y-2">
+              {tuning.recommendations.slice(0, 5).map((r: any, i: number) => (
+                <li key={i} className="rounded-lg bg-mc-raise border border-mc-line p-2.5 text-xs">
+                  <div className="flex justify-between gap-2"><Mono className="text-mc-ink">{r.param}</Mono>
+                    <span className={cx(r.direction === "decrease" ? "text-mc-ok" : "text-mc-warn")}>{r.current} → {r.suggested}</span></div>
+                  <div className="text-mc-mute mt-1">{r.reason}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+/* ── Sandbox ────────────────────────────────────────────────────────────── */
+
+const PRESETS = [
+  { label: "Clear aisle", tone: "ok" as const,
+    telemetry: { x: 14, y: 3.5, zone: "aisle", nearest_obstacle_m: 2.0, human_detected: false, human_conf: 0.0 },
+    proposal: { intent: "MOVE_TO", params: { x: 18, y: 3.5, max_speed: 0.5 }, rationale: "Follow the aisle" } },
+  { label: "Person 2.5 m, too fast", tone: "warn" as const,
+    telemetry: { x: 14, y: 3.5, zone: "aisle", nearest_obstacle_m: 1.5, human_detected: true, human_conf: 0.85, human_distance_m: 2.5 },
+    proposal: { intent: "MOVE_TO", params: { x: 16, y: 3.5, max_speed: 0.8 }, rationale: "Approach target" } },
+  { label: "Person 0.8 m away", tone: "stop" as const,
+    telemetry: { x: 14, y: 3.5, zone: "aisle", nearest_obstacle_m: 1.5, human_detected: true, human_conf: 0.95, human_distance_m: 0.8 },
+    proposal: { intent: "MOVE_TO", params: { x: 15, y: 3.5, max_speed: 0.3 }, rationale: "Keep going" } },
+  { label: "Straight through racking", tone: "stop" as const,
+    telemetry: { x: 3, y: 3.5, zone: "aisle", nearest_obstacle_m: 1.1, human_detected: false, human_conf: 0.0 },
+    proposal: { intent: "MOVE_TO", params: { x: 16, y: 23, max_speed: 0.3 }, rationale: "Shortest path" } },
+  { label: "Outside the geofence", tone: "stop" as const,
+    telemetry: { x: 38, y: 12, zone: "corridor", nearest_obstacle_m: 3.0, human_detected: false, human_conf: 0.0 },
+    proposal: { intent: "MOVE_TO", params: { x: 45, y: 12, max_speed: 0.5 }, rationale: "Leave the site" } },
+];
+
+function Sandbox() {
+  const [idx, setIdx] = useState(1);
+  const [tel, setTel] = useState(JSON.stringify(PRESETS[1].telemetry, null, 2));
+  const [prop, setProp] = useState(JSON.stringify(PRESETS[1].proposal, null, 2));
+  const [res, setRes] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
+
+  function pick(i: number) {
+    setIdx(i); setRes(null); setErr(null);
+    setTel(JSON.stringify(PRESETS[i].telemetry, null, 2));
+    setProp(JSON.stringify(PRESETS[i].proposal, null, 2));
+  }
+  async function run() {
+    setErr(null); setBusy(true);
+    try { setRes(await testPolicy({ telemetry: JSON.parse(tel), proposal: JSON.parse(prop) })); }
+    catch (e: any) { setErr(e instanceof SyntaxError ? "That isn't valid JSON." : e.message || "Check failed"); }
+    setBusy(false);
+  }
+  const p = useMemo(() => { try { return JSON.parse(prop); } catch { return null; } }, [prop]);
+  const t = useMemo(() => { try { return JSON.parse(tel); } catch { return null; } }, [tel]);
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-4">
+      <Panel title="A proposed move" subtitle="Pick a situation, or edit the raw input">
+        <div className="flex flex-wrap gap-2 mb-4">
+          {PRESETS.map((s, i) => (
+            <button key={s.label} onClick={() => pick(i)}
+              className={cx("rounded-lg border px-3 py-1.5 text-xs font-medium", i === idx ? "border-mc-accent bg-mc-accent/10 text-mc-ink" : "border-mc-line2 text-mc-mute hover:text-mc-ink")}>
+              <span className={cx("inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle", s.tone === "ok" ? "bg-mc-ok" : s.tone === "warn" ? "bg-mc-warn" : "bg-mc-stop")} />{s.label}
+            </button>
+          ))}
+        </div>
+        {t && p && (
+          <div className="grid grid-cols-2 gap-3 text-xs mb-4">
+            <div className="rounded-lg bg-mc-raise border border-mc-line p-3">
+              <div className="text-mc-dim uppercase tracking-wider text-[10px] mb-1">Robot sees</div>
+              <div>at ({t.x}, {t.y}) in {t.zone}</div>
+              <div>nearest obstacle {t.nearest_obstacle_m} m</div>
+              <div>{t.human_detected ? `person ${t.human_distance_m ?? "?"} m away (conf ${t.human_conf})` : "no person detected"}</div>
+            </div>
+            <div className="rounded-lg bg-mc-raise border border-mc-line p-3">
+              <div className="text-mc-dim uppercase tracking-wider text-[10px] mb-1">Planner proposes</div>
+              <div>{p.intent} → ({p.params?.x}, {p.params?.y})</div>
+              <div>at {p.params?.max_speed} m/s</div>
+              <div className="text-mc-mute">&ldquo;{p.rationale}&rdquo;</div>
+            </div>
+          </div>
+        )}
+        <button onClick={() => setAdvanced(!advanced)} className="text-xs text-mc-accent hover:underline mb-2">{advanced ? "Hide" : "Edit"} raw input</button>
+        {advanced && (
+          <div className="grid gap-3 mb-3">
+            <label className="text-xs text-mc-dim">Telemetry
+              <textarea value={tel} onChange={(e) => setTel(e.target.value)} rows={7} spellCheck={false}
+                className="mt-1 w-full rounded-lg bg-mc-bg border border-mc-line2 p-2 font-mono text-xs text-mc-ink" /></label>
+            <label className="text-xs text-mc-dim">Proposal
+              <textarea value={prop} onChange={(e) => setProp(e.target.value)} rows={6} spellCheck={false}
+                className="mt-1 w-full rounded-lg bg-mc-bg border border-mc-line2 p-2 font-mono text-xs text-mc-ink" /></label>
+          </div>
+        )}
+        <Button variant="primary" onClick={run} disabled={busy} className="w-full">{busy ? "Checking…" : "Ask the gate"}</Button>
+        {err && <div className="mt-2"><Notice tone="stop">{err}</Notice></div>}
+      </Panel>
+
+      <Panel title="Gate decision">
+        {!res ? <Empty title="No decision yet">The gate&apos;s verdict, the policies that fired and why will appear here.</Empty> : (
+          <div>
+            <div className="flex items-center gap-3">
+              <Verdict value={res.decision} className="text-sm px-3 py-1" />
+              {res.policy_state && <Verdict value={res.policy_state} />}
+              <span className="ml-auto text-xs text-mc-dim">risk <span className="text-mc-ink tabular">{Number(res.risk_score ?? 0).toFixed(2)}</span></span>
+            </div>
+            {(res.policy_hits || []).length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {(res.policy_hits || []).map((h: string, i: number) => (
+                  <div key={h + i} className="rounded-lg border border-mc-stop/30 bg-mc-stop/5 p-2.5">
+                    <Mono className="text-mc-stop">{h}</Mono>
+                    {res.reasons?.[i] && <div className="text-xs text-mc-mute mt-1">{res.reasons[i]}</div>}
                   </div>
                 ))}
+                {res.required_action && <Notice tone="warn">Required: {res.required_action}</Notice>}
               </div>
-              <button onClick={() => setAdversarialResults(null)} className="w-full text-xs text-slate-500 hover:text-slate-300 py-1 transition mt-2">
-                ↺ Run Again
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+            ) : <div className="mt-4"><Notice tone="ok">All 11 policies passed. The move would execute.</Notice></div>}
+          </div>
+        )}
+      </Panel>
     </div>
   );
 }

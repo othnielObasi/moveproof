@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { PageHeader } from "@/components/ui";
+import { EvidenceNav } from "@/components/EvidenceNav";
 import { getAllAudit, getMissionAudit } from "@/lib/api";
 import type { MissionAuditEntry } from "@/lib/types";
 
@@ -47,27 +49,15 @@ export default function AuditTrailPage() {
   const uniqueMissions = new Set(entries.map((e) => e.mission_id));
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Audit Trail</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {entries.length} entries across {uniqueMissions.size} mission{uniqueMissions.size !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <Link
-          href="/missions"
-          className="text-sm text-cyan-400 hover:text-cyan-300 transition"
-        >
-          ← Back to Missions
-        </Link>
-      </div>
+    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <PageHeader eyebrow="Evidence" title="Audit trail"
+        subtitle={`${entries.length} entries across ${uniqueMissions.size} mission${uniqueMissions.size !== 1 ? "s" : ""}. Mission changes, recorded and append-only.`} />
+      <EvidenceNav />
 
       {/* Filter */}
       <form onSubmit={handleFilterSubmit} className="flex gap-3 mb-6">
         <input
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+          className="flex-1 bg-mc-panel border border-mc-line rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-cyan-500 placeholder-slate-500"
           placeholder="Filter by mission ID (e.g. mis_abc123)... leave empty for all"
           value={filterMission}
           onChange={(e) => setFilterMission(e.target.value)}
@@ -82,7 +72,7 @@ export default function AuditTrailPage() {
           <button
             type="button"
             onClick={() => { setFilterMission(""); setTimeout(loadAudit, 0); }}
-            className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm px-4 py-2 rounded-lg transition"
+            className="bg-mc-raise hover:bg-mc-line2 text-mc-ink/85 text-sm px-4 py-2 rounded-lg transition"
           >
             Clear
           </button>
@@ -97,16 +87,16 @@ export default function AuditTrailPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-slate-400">Loading audit trail...</div>
+        <div className="text-center py-12 text-mc-mute">Loading audit trail...</div>
       ) : entries.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">
+        <div className="text-center py-12 text-mc-mute">
           <div className="text-4xl mb-2">📋</div>
           <div>No audit entries found.</div>
         </div>
       ) : (
         <div className="relative">
           {/* Timeline line */}
-          <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-slate-700" />
+          <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-mc-raise" />
 
           <div className="space-y-4">
             {entries.map((entry) => {
@@ -119,11 +109,11 @@ export default function AuditTrailPage() {
               return (
                 <div key={entry.id} className="relative pl-12">
                   {/* Timeline dot */}
-                  <div className="absolute left-3.5 top-4 w-3 h-3 rounded-full bg-slate-600 border-2 border-slate-800 z-10" />
+                  <div className="absolute left-3.5 top-4 w-3 h-3 rounded-full bg-mc-line2 border-2 border-mc-line z-10" />
 
                   <div
-                    className={`bg-slate-800 border rounded-xl p-4 transition cursor-pointer hover:border-slate-600 ${
-                      isExpanded ? "border-cyan-600" : "border-slate-700"
+                    className={`bg-mc-panel border rounded-xl p-4 transition cursor-pointer hover:border-mc-line2 ${
+                      isExpanded ? "border-cyan-600" : "border-mc-line"
                     }`}
                     onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                   >
@@ -134,20 +124,20 @@ export default function AuditTrailPage() {
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
                             {badge.label}
                           </span>
-                          <span className="font-mono text-xs text-slate-500 truncate">
+                          <span className="font-mono text-xs text-mc-dim truncate">
                             {entry.mission_id}
                           </span>
                         </div>
                         {entry.details && (
-                          <p className="text-sm text-slate-300 mt-1">{entry.details}</p>
+                          <p className="text-sm text-mc-ink/85 mt-1">{entry.details}</p>
                         )}
                       </div>
 
                       <div className="text-right flex-shrink-0">
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-mc-mute">
                           {new Date(entry.ts).toLocaleString()}
                         </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">
+                        <div className="text-[10px] text-mc-dim mt-0.5">
                           by {entry.actor}
                         </div>
                       </div>
@@ -155,14 +145,14 @@ export default function AuditTrailPage() {
 
                     {/* Expanded diff view */}
                     {isExpanded && hasChanges && (
-                      <div className="mt-3 pt-3 border-t border-slate-700">
+                      <div className="mt-3 pt-3 border-t border-mc-line">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {entry.old_values && Object.keys(entry.old_values).length > 0 && (
                             <div>
                               <div className="text-[10px] font-bold text-red-400 uppercase tracking-wider mb-1">
                                 Before
                               </div>
-                              <pre className="bg-slate-900 rounded-lg p-3 text-xs text-red-300 overflow-x-auto">
+                              <pre className="bg-mc-bg rounded-lg p-3 text-xs text-red-300 overflow-x-auto">
                                 {JSON.stringify(entry.old_values, null, 2)}
                               </pre>
                             </div>
@@ -172,7 +162,7 @@ export default function AuditTrailPage() {
                               <div className="text-[10px] font-bold text-green-400 uppercase tracking-wider mb-1">
                                 After
                               </div>
-                              <pre className="bg-slate-900 rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
+                              <pre className="bg-mc-bg rounded-lg p-3 text-xs text-green-300 overflow-x-auto">
                                 {JSON.stringify(entry.new_values, null, 2)}
                               </pre>
                             </div>
@@ -182,7 +172,7 @@ export default function AuditTrailPage() {
                     )}
 
                     {isExpanded && !hasChanges && (
-                      <div className="mt-3 pt-3 border-t border-slate-700 text-xs text-slate-500">
+                      <div className="mt-3 pt-3 border-t border-mc-line text-xs text-mc-dim">
                         No value changes recorded for this entry.
                       </div>
                     )}

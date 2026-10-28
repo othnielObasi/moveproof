@@ -1,582 +1,175 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { listMissions, createMission, startRun, listRuns, getScoreTrends, getCrossRunLearning, getTuningRecommendations, checkCrossRunIntegrity, getOptimizationEnvelope } from "@/lib/api";
-import type { Mission, MissionStatus } from "@/lib/types";
+import { getBenchmarks, getLlmModels, getPerceptionStatus, listRuns } from "@/lib/api";
+import { Button, Mono, Page, Panel, Pill, Stat, Verdict, cx } from "@/components/ui";
 
-// API configuration
-const API_URL = process.env.NEXT_PUBLIC_API_BASE || "/api";
+type Suite = { id: string; title: string; execution: string; totals: Record<string, any>; model_usage?: any };
+type Run = { id: string; mission_id: string; status: string; started_at: string; ended_at?: string | null };
 
-interface SystemStatus {
-  api: 'connected' | 'disconnected' | 'checking';
-  planner: 'enabled' | 'disabled' | 'unknown';
-  provider: string;
-  database: 'connected' | 'disconnected' | 'unknown';
-}
+const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 
-// Realistic warehouse mission presets (coordinates match world.json rack-face bays)
-// Zone layout: aisle (y 0–12), corridor (y 12–15), staging (y 15–19), loading_bay (y 19–25)
-const PRESETS = [
-  { title: "Deliver pallet to B-03",              goalX: 16, goalY: 23,   icon: "📦" },  // dock bay
-  { title: "Transport hazmat container to B-05",   goalX: 28, goalY: 23,   icon: "⚠️" },  // dock bay
-  { title: "Pick items from rack A-04",            goalX: 21, goalY: 3.5,  icon: "🏷️" },  // aisle A pick face
-  { title: "Restock rack A-08 in aisle B",         goalX: 8,  goalY: 7.5,  icon: "🧊" },  // aisle B pick face
-  { title: "Move goods to staging S-01",           goalX: 8,  goalY: 17,   icon: "📦" },  // staging area
-  { title: "Cross-dock transfer via corridor",     goalX: 25, goalY: 13.5, icon: "🔄" },  // corridor
+const STEPS = [
+  { n: "01", title: "Propose", who: "NVIDIA Nemotron 3 Ultra", text: "Plans the mission and replans after a denial. Fast Nemotron models handle per-step calls. Every output is only a proposal." },
+  { n: "02", title: "Decide", who: "Deterministic gate · 11 policies", text: "Geofence, zone speed, people and vehicles, racking, hazard zones, perception confidence, operator escalation. No model in the loop." },
+  { n: "03", title: "Execute or stop", who: "Robot / simulator", text: "Only approved moves run. Every denial sends STOP, so the robot never continues toward an old target." },
+  { n: "04", title: "Prove", who: "Hash chain + Ed25519", text: "Every decision is chained and signed with the rules version it was judged under. Anyone can verify it later." },
 ];
 
-const STATUS_BADGE: Record<MissionStatus, { label: string; cls: string }> = {
-  draft:     { label: "Draft",      cls: "bg-slate-600 text-slate-200" },
-  executing: { label: "Executing",  cls: "bg-green-600 text-white animate-pulse" },
-  paused:    { label: "Paused",     cls: "bg-yellow-600 text-white" },
-  completed: { label: "Completed",  cls: "bg-cyan-700 text-white" },
-  deleted:   { label: "Deleted",    cls: "bg-red-800 text-red-200" },
-};
+const UNTRUSTED = [
+  { title: "Model plans", text: "Nemotron proposes; the gate judges every move. Plans that cut through racking are re-routed along the aisles." },
+  { title: "Vision", text: "Nemotron 3.5 Super VL reads the robot camera. It is cross-checked with the sensors; a sighting they can't confirm can only slow the robot." },
+  { title: "The web", text: "Tavily hazard guidance passes a firewall and a two-source rule. Zones can only tighten; the gate never reads the text." },
+  { title: "Learning", text: "Lessons come only from the gate's own records and change what the planner proposes, never what the gate allows." },
+];
 
-export default function HomePage() {
-  const router = useRouter();
-  const [missions, setMissions] = useState<Mission[]>([]);
-  const [status, setStatus] = useState<SystemStatus>({
-    api: 'checking',
-    planner: 'unknown',
-    provider: '',
-    database: 'unknown'
-  });
-  const [error, setError] = useState<string | null>(null);
-  const [title, setTitle] = useState("Deliver to Bay 3");
-  const [goalX, setGoalX] = useState(15);
-  const [goalY, setGoalY] = useState(7);
-  const [creating, setCreating] = useState(false);
-  const [missionRunIds, setMissionRunIds] = useState<Record<string, string>>({});
+export default function OverviewPage() {
+  const [suites, setSuites] = useState<Suite[]>([]);
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [models, setModels] = useState<any>(null);
+  const [vision, setVision] = useState<any>(null);
 
-  // Phase E: Analytics data
-  const [scoreTrends, setScoreTrends] = useState<any[]>([]);
-  const [crossRunLearning, setCrossRunLearning] = useState<any>(null);
-  const [tuningRecs, setTuningRecs] = useState<any>(null);
-  const [crossRunIntegrity, setCrossRunIntegrity] = useState<any>(null);
-  const [optimizationEnvelope, setOptimizationEnvelope] = useState<any>(null);
-
-  // Check API health
   useEffect(() => {
-    async function checkHealth() {
-      try {
-        let res: Response | null = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            res = await fetch(`${API_URL}/health`, { cache: "no-store" });
-            break;
-          } catch {
-            if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
-          }
-        }
-        if (res && res.ok) {
-          const data = await res.json();
-          setStatus({
-            api: 'connected',
-            planner: (data.nemotron_enabled || data.gemini_enabled) ? 'enabled' : 'disabled',
-            provider: data.planner_provider || (data.gemini_enabled ? 'gemini' : 'fallback'),
-            database: 'connected'
-          });
-          setError(null);
-        } else {
-          throw new Error('API returned error');
-        }
-      } catch (e) {
-        setStatus(prev => ({ ...prev, api: 'disconnected' }));
-        setError('Cannot connect to backend API. Please check your deployment.');
-      }
-    }
-    
-    checkHealth();
-    const interval = setInterval(checkHealth, 30000);
-    return () => clearInterval(interval);
+    getBenchmarks().then((d) => setSuites(d.suites || [])).catch(() => {});
+    getLlmModels().then(setModels).catch(() => {});
+    getPerceptionStatus().then(setVision).catch(() => {});
+    const loadRuns = () => listRuns().then((d: any) => setRuns(Array.isArray(d) ? d : d.runs || [])).catch(() => {});
+    loadRuns();
+    const id = setInterval(loadRuns, 10000);
+    return () => clearInterval(id);
   }, []);
 
-  // Fetch missions
-  useEffect(() => {
-    async function fetchMissions() {
-      if (status.api !== 'connected') return;
-      
-      try {
-        const data = await listMissions();
-        setMissions(data);
-        // Fetch latest run_id for executing/completed missions
-        const runMap: Record<string, string> = {};
-        await Promise.all(
-          data
-            .filter((m: any) => m.status === 'executing' || m.status === 'completed' || m.status === 'paused')
-            .map(async (m: any) => {
-              try {
-                const runs = await listRuns(m.id);
-                if (runs.length > 0) runMap[m.id] = runs[0].id;
-              } catch {}
-            })
-        );
-        setMissionRunIds(runMap);
-      } catch (e) {
-        console.error('Failed to fetch missions:', e);
-      }
-    }
-    
-    fetchMissions();
-  }, [status.api]);
-
-  // Phase E: Fetch analytics when connected (deferred to avoid blocking initial render)
-  useEffect(() => {
-    if (status.api !== 'connected') return;
-    const timer = setTimeout(() => {
-      (async () => {
-        try { setScoreTrends((await getScoreTrends(20)).trends || []); } catch (_) {}
-        try { setCrossRunLearning(await getCrossRunLearning()); } catch (_) {}
-        try { setTuningRecs(await getTuningRecommendations()); } catch (_) {}
-        try { setCrossRunIntegrity(await checkCrossRunIntegrity()); } catch (_) {}
-        try { setOptimizationEnvelope(await getOptimizationEnvelope()); } catch (_) {}
-      })();
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [status.api]);
-
-  // Create mission
-  async function handleCreate() {
-    setCreating(true);
-    setError(null);
-    
-    try {
-      const data = await createMission({ title, goal: { x: goalX, y: goalY } });
-      setMissions(prev => [data, ...prev]);
-      setTitle("Deliver to Bay 3");
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function handleStartRun(missionId: string) {
-    try {
-      const data = await startRun(missionId);
-      router.push(`/runs/${data.run_id}`);
-    } catch (e: any) {
-      setError(e.message || 'Failed to start run');
-    }
-  }
+  const nemo = suites.find((s) => s.id === "nemotron");
+  const rule = suites.find((s) => s.id === "rule_based");
+  const ultra = nemo?.model_usage?.by_model?.find((m: any) => String(m.model).includes("Ultra"));
+  const active = runs.find((r) => ["running", "planning", "paused"].includes(r.status));
+  const recent = useMemo(() => [...runs].sort((a, b) => (b.started_at || "").localeCompare(a.started_at || "")).slice(0, 6), [runs]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Hero Section */}
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold mb-4">
-          <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-            MoveProof
-          </span>
-        </h1>
-        <p className="text-xl text-slate-400 mb-6">
-          The governance layer for autonomous robot control
-        </p>
-        <Link 
-          href="/demo" 
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition shadow-lg shadow-cyan-500/30"
-        >
-          🚀 Launch Simulator
-        </Link>
-      </div>
-
-      {/* Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        {/* API Status */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-400 text-sm">Backend API</span>
-            <div className={`w-3 h-3 rounded-full ${
-              status.api === 'connected' ? 'bg-green-500' :
-              status.api === 'checking' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-            }`} />
-          </div>
-          <div className="text-2xl font-bold">
-            {status.api === 'connected' ? '✅ Connected' :
-             status.api === 'checking' ? '⏳ Checking...' : '❌ Disconnected'}
-          </div>
-          <p className="text-xs text-slate-500 mt-1">{API_URL || '(same origin)'}</p>
-        </div>
-
-        {/* AI Planner Status */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-400 text-sm">AI Planner</span>
-            <div className={`w-3 h-3 rounded-full ${
-              status.planner === 'enabled' ? 'bg-green-500' :
-              status.planner === 'disabled' ? 'bg-yellow-500' : 'bg-slate-500'
-            }`} />
-          </div>
-          <div className="text-2xl font-bold">
-            {status.planner === 'enabled' ? (status.provider === 'nemotron' ? '🟩 Nemotron' : '🤖 Gemini') :
-             status.planner === 'disabled' ? '📦 Mock Mode' : '❓ Unknown'}
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            {status.planner === 'disabled' ? 'Using deterministic fallback' : status.provider === 'nemotron' ? 'NVIDIA Nemotron on Nebius Token Factory' : 'AI planning active'}
-          </p>
-        </div>
-
-        {/* Governance Status */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-400 text-sm">Governance Engine</span>
-            <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
-          </div>
-          <div className="text-2xl font-bold">🛡️ Active</div>
-          <p className="text-xs text-slate-500 mt-1">Policies enforced</p>
-        </div>
-      </div>
-
-      {/* Error Banner */}
-      {error && (
-        <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-4 mb-8">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⚠️</span>
-            <div>
-              <div className="font-semibold text-red-400">Connection Error</div>
-              <div className="text-sm text-slate-300">{error}</div>
+    <div className="mc-grid-bg">
+      <Page wide>
+        {/* ── Hero ─────────────────────────────────────────────────────── */}
+        <section className="grid lg:grid-cols-5 gap-8 items-center pt-4 pb-10">
+          <div className="lg:col-span-3">
+            <div className="flex flex-wrap gap-2 mb-4">
+              <Pill tone="nv">NVIDIA Nemotron</Pill>
+              <Pill tone="accent">Nebius Token Factory · AI Cloud</Pill>
+              <Pill>Physical AI</Pill>
             </div>
+            <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.05]">
+              Every robot move,<br /><span className="text-mc-accent">proven safe</span> before it happens.
+            </h1>
+            <p className="mt-5 text-base sm:text-lg text-mc-mute max-w-2xl leading-relaxed">
+              An NVIDIA Nemotron planner proposes. A deterministic governance gate decides. Every decision leaves a signed,
+              hash-chained receipt. The AI can be brilliant or wrong; the robot only ever does what the rules allow.
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Button variant="primary" href={active ? `/runs/${active.id}` : "/twin"} className="px-5 py-2.5">
+                {active ? "Watch the mission in progress" : "Open the live warehouse"}
+              </Button>
+              <Button href="/demo" className="px-5 py-2.5">Guided demo</Button>
+              <Button variant="ghost" href="/evidence">See the evidence →</Button>
+            </div>
+            {active && (
+              <div className="mt-4 text-xs text-mc-mute">
+                <span className="text-mc-accent">●</span> A mission is running now: <Link className="text-mc-accent hover:underline" href={`/runs/${active.id}`}><Mono>{active.id}</Mono></Link>.
+                The demo robot is shared, so one mission runs at a time.
+              </div>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* Create Mission */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-lg font-semibold mb-4">Create New Mission</h2>
+          {/* Proof */}
+          <div className="lg:col-span-2 grid grid-cols-2 gap-3">
+            <Stat className="col-span-2" label="Unsafe moves executed · Nemotron planner"
+              value={<span>{fmt(nemo?.totals?.ungoverned?.unsafe_executed)} <span className="text-mc-dim text-lg">→</span> <span className="text-mc-ok">{fmt(nemo?.totals?.governed?.unsafe_executed)}</span></span>}
+              hint={nemo ? "Without the gate → with it. 20 seeded missions per arm, run on Nebius Serverless Jobs." : "Loading benchmark…"} />
+            <Stat label="Rule-based planner" tone="ok"
+              value={<span><span className="text-mc-ink">{fmt(rule?.totals?.ungoverned?.unsafe_executed)}</span> <span className="text-mc-dim text-base">→</span> {fmt(rule?.totals?.governed?.unsafe_executed)}</span>}
+              hint="150 missions per arm" />
+            <Stat label="Ultra calls on Token Factory" tone="nv"
+              value={ultra ? `${ultra.ok}/${ultra.calls}` : "—"} hint={ultra ? `p50 ${(ultra.p50_latency_ms / 1000).toFixed(1)} s · benchmark run` : "benchmark run"} />
+          </div>
+        </section>
 
-          {/* Preset quick-pick */}
-          <div className="mb-4">
-            <label className="text-xs text-slate-400 block mb-2">Quick Presets</label>
-            <div className="grid grid-cols-2 gap-2">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.title}
-                  onClick={() => { setTitle(p.title); setGoalX(p.goalX); setGoalY(p.goalY); }}
-                  className={`text-left text-xs p-2 rounded-lg border transition ${
-                    title === p.title
-                      ? "border-cyan-500 bg-cyan-500/10 text-white"
-                      : "border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-500"
-                  }`}
-                >
-                  <span className="mr-1">{p.icon}</span> {p.title}
-                </button>
+        {/* ── How it works ─────────────────────────────────────────────── */}
+        <section className="mb-10">
+          <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-mc-dim mb-3">How it works</h2>
+          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
+            {STEPS.map((s, i) => (
+              <div key={s.n} className="relative rounded-xl border border-mc-line bg-mc-panel p-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-mc-accent">{s.n}</span>
+                  {i < 3 && <span className="hidden xl:block absolute -right-2.5 top-1/2 -translate-y-1/2 text-mc-line2 z-10">▸</span>}
+                </div>
+                <div className="mt-2 text-lg font-semibold">{s.title}</div>
+                <div className={cx("text-xs font-medium mt-0.5", i === 0 ? "text-mc-nv" : "text-mc-accent")}>{s.who}</div>
+                <p className="mt-2 text-sm text-mc-mute leading-relaxed">{s.text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="grid lg:grid-cols-3 gap-4 mb-10">
+          {/* ── Untrusted by default ─────────────────────────────────── */}
+          <Panel title="Untrusted by default" subtitle="Every outside input can add caution. None can remove it." className="lg:col-span-2">
+            <div className="grid sm:grid-cols-2 gap-3">
+              {UNTRUSTED.map((u) => (
+                <div key={u.title} className="rounded-lg border border-mc-line bg-mc-raise/60 p-3">
+                  <div className="text-sm font-semibold">{u.title}</div>
+                  <p className="mt-1 text-xs text-mc-mute leading-relaxed">{u.text}</p>
+                </div>
               ))}
             </div>
-          </div>
+          </Panel>
 
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm text-slate-400 block mb-1">Mission Title (LLM Instruction)</label>
-              <input 
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500"
-                placeholder="e.g. Deliver pallet to Bay 3"
-              />
-              <p className="text-[10px] text-slate-500 mt-1">This title is sent to the Nemotron planner as the planning instruction</p>
+          {/* ── Live system ─────────────────────────────────────────── */}
+          <Panel title="Live system" subtitle="What is running behind this page">
+            <div className="space-y-2.5 text-sm">
+              <Row k="Mission planning" v={<span className="text-mc-nv">{short(models?.tiers?.reasoning)}</span>} />
+              <Row k="Per-step proposals" v={<span className="text-mc-nv">{(models?.tiers?.fast || []).map(short).join(", ") || "—"}</span>} />
+              <Row k="Vision cross-check" v={<span className="text-mc-nv">{vision?.enabled ? short(vision.model) : "off"}</span>} />
+              <Row k="Safety gate" v="11 deterministic policies" />
+              <Row k="Hosting" v="Nebius AI Cloud VM" />
+              <Row k="Benchmark compute" v="Nebius Serverless Jobs" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-slate-400 block mb-1">Goal X</label>
-                <input 
-                  type="number"
-                  value={goalX}
-                  onChange={(e) => setGoalX(Number(e.target.value))}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-slate-400 block mb-1">Goal Y</label>
-                <input 
-                  type="number"
-                  value={goalY}
-                  onChange={(e) => setGoalY(Number(e.target.value))}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-            </div>
-            <button 
-              onClick={handleCreate}
-              disabled={creating || status.api !== 'connected'}
-              className="w-full bg-cyan-500 hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition"
-            >
-              {creating ? 'Creating...' : 'Create Mission'}
-            </button>
-          </div>
-        </div>
+          </Panel>
+        </section>
 
-        {/* Features */}
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-lg font-semibold mb-4">Governance Features</h2>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
-              <span className="text-2xl">🛡️</span>
-              <div>
-                <div className="font-medium">Policy Engine</div>
-                <div className="text-xs text-slate-400">Real-time safety checks</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
-              <span className="text-2xl">📊</span>
-              <div>
-                <div className="font-medium">Risk Scoring</div>
-                <div className="text-xs text-slate-400">0.70 threshold enforcement</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
-              <span className="text-2xl">🔗</span>
-              <div>
-                <div className="font-medium">Audit Chain</div>
-                <div className="text-xs text-slate-400">SHA-256 tamper-proof logs</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
-              <span className="text-2xl">📋</span>
-              <div>
-                <div className="font-medium">Compliance Reports</div>
-                <div className="text-xs text-slate-400">ISO 42001 & EU AI Act ready</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Missions List — 5 most recent */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Recent Missions</h2>
-          {missions.length > 0 && (
-            <Link href="/missions" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition">
-              View all {missions.length} →
-            </Link>
+        {/* ── Recent runs ──────────────────────────────────────────────── */}
+        <Panel title="Recent runs" actions={<Button variant="ghost" href="/runs" className="py-1">All runs →</Button>} padded={false}>
+          {recent.length === 0 ? (
+            <div className="p-6 text-sm text-mc-dim text-center">No runs yet. <Link href="/twin" className="text-mc-accent hover:underline">Plan the first mission</Link>.</div>
+          ) : (
+            <ul className="divide-y divide-mc-line">
+              {recent.map((r) => (
+                <li key={r.id}>
+                  <Link href={`/runs/${r.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-mc-raise/60">
+                    <span className="flex items-center gap-3 min-w-0">
+                      <Verdict value={r.status} />
+                      <Mono>{r.id}</Mono>
+                    </span>
+                    <span className="text-xs text-mc-dim tabular">{r.started_at ? new Date(r.started_at).toLocaleString() : ""}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
-        {missions.length === 0 ? (
-          <div className="text-center py-8 text-slate-400">
-            <div className="text-4xl mb-2">📭</div>
-            <div>No missions yet. Create one above or try the simulator!</div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {missions.slice(0, 5).map((m) => {
-              const badge = STATUS_BADGE[m.status] || STATUS_BADGE.draft;
-              return (
-                <div key={m.id} className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{m.title}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${badge.cls}`}>
-                        {badge.label}
-                      </span>
-                    </div>
-                    <div className="text-sm text-slate-400">
-                      Goal: ({m.goal?.x}, {m.goal?.y}){m.goal?.zone && <span className="ml-1 text-cyan-400">[{m.goal.zone}]</span>} • {new Date(m.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 ml-4 flex-shrink-0">
-                    {(m.status === "draft" || m.status === "paused") && (
-                      <button 
-                        onClick={() => handleStartRun(m.id)}
-                        disabled={status.api !== 'connected'}
-                        className="bg-green-500 hover:bg-green-600 disabled:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition text-sm"
-                      >
-                        {m.status === "paused" ? "Resume & Run" : "Execute"}
-                      </button>
-                    )}
-                    {m.status === "executing" && missionRunIds[m.id] && (
-                      <Link
-                        href={`/runs/${missionRunIds[m.id]}`}
-                        className="bg-green-500/20 border border-green-500/50 text-green-400 hover:bg-green-500/30 px-4 py-2 rounded-lg font-medium transition text-sm"
-                      >
-                        View Live →
-                      </Link>
-                    )}
-                    {m.status === "executing" && !missionRunIds[m.id] && (
-                      <span className="text-green-400 text-sm font-medium px-3 py-2 animate-pulse">Running...</span>
-                    )}
-                    {m.status === "completed" && missionRunIds[m.id] && (
-                      <Link
-                        href={`/runs/${missionRunIds[m.id]}`}
-                        className="bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/30 px-4 py-2 rounded-lg font-medium transition text-sm"
-                      >
-                        View Run →
-                      </Link>
-                    )}
-                    {m.status === "completed" && !missionRunIds[m.id] && (
-                      <span className="text-cyan-400 text-sm px-3 py-2">Done</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {missions.length > 5 && (
-              <div className="text-center pt-2">
-                <Link href="/missions" className="text-sm text-cyan-400 hover:text-cyan-300">
-                  + {missions.length - 5} more mission{missions.length - 5 !== 1 ? "s" : ""}
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        </Panel>
+      </Page>
+    </div>
+  );
+}
 
-      {/* Phase E: Analytics & Governance Dashboard */}
-      {status.api === 'connected' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-          {/* Score Trends (#10) */}
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-            <h2 className="text-lg font-semibold mb-4">📈 Score Trends</h2>
-            {scoreTrends.length === 0 ? (
-              <div className="text-slate-400 text-sm text-center py-4">No trend data yet. Complete some runs.</div>
-            ) : (
-              <div className="space-y-2">
-                {scoreTrends.slice(0, 8).map((t: any, i: number) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500 font-mono w-20 truncate">{t.run_id?.slice(0, 8) || `Run ${i+1}`}</span>
-                    <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${(t.composite ?? t.score ?? 0) > 0.7 ? "bg-green-500" : (t.composite ?? t.score ?? 0) > 0.4 ? "bg-yellow-500" : "bg-red-500"}`}
-                        style={{ width: `${((t.composite ?? t.score ?? 0) * 100)}%` }} />
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-400 w-10 text-right">{((t.composite ?? t.score ?? 0) * 100).toFixed(0)}%</span>
-                  </div>
-                ))}
-                {scoreTrends.length > 8 && <div className="text-[10px] text-slate-500 text-center">+{scoreTrends.length - 8} more runs</div>}
-              </div>
-            )}
-          </div>
+function short(m?: string) {
+  return String(m || "—").replace(/^nvidia\//, "").replace(/_/g, ".");
+}
 
-          {/* Cross-Run Learning (#18) */}
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-            <h2 className="text-lg font-semibold mb-4">🧠 Cross-Run Learning</h2>
-            {!crossRunLearning ? (
-              <div className="text-slate-400 text-sm text-center py-4">Loading learning data...</div>
-            ) : (
-              <div className="space-y-3">
-                {crossRunLearning.lessons?.length > 0 ? (
-                  crossRunLearning.lessons.slice(0, 5).map((l: any, i: number) => (
-                    <div key={i} className="text-xs bg-purple-500/10 border border-purple-500/20 rounded px-3 py-2 text-purple-200">
-                      {typeof l === "string" ? l : l.content || l.lesson || JSON.stringify(l)}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-slate-400 text-sm text-center py-2">No lessons extracted yet</div>
-                )}
-                {crossRunLearning.pattern_summary && (
-                  <div className="text-[10px] text-slate-400 bg-slate-900/60 rounded p-2">{crossRunLearning.pattern_summary}</div>
-                )}
-                {crossRunLearning.runs_analyzed != null && (
-                  <div className="text-[10px] text-slate-500">{crossRunLearning.runs_analyzed} runs analyzed</div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* System Integrity (#15) */}
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-            <h2 className="text-lg font-semibold mb-4">🔒 System Integrity</h2>
-            {!crossRunIntegrity ? (
-              <div className="text-slate-400 text-sm text-center py-4">Checking integrity...</div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
-                    crossRunIntegrity.verdict === "CLEAN" ? "bg-green-500/15 text-green-400 border-green-500/30" :
-                    crossRunIntegrity.verdict === "FLAGGED" ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/30" :
-                    "bg-red-500/15 text-red-400 border-red-500/30"
-                  }`}>
-                    {crossRunIntegrity.verdict === "CLEAN" ? "✓ All Clean" : crossRunIntegrity.verdict || "Unknown"}
-                  </span>
-                  {crossRunIntegrity.runs_checked != null && (
-                    <span className="text-[10px] text-slate-500">{crossRunIntegrity.runs_checked} runs checked</span>
-                  )}
-                </div>
-                {crossRunIntegrity.flagged_runs?.length > 0 && (
-                  <div className="space-y-1">
-                    {crossRunIntegrity.flagged_runs.map((r: any, i: number) => (
-                      <div key={i} className="text-[10px] bg-yellow-500/10 border border-yellow-500/20 rounded px-2 py-1 text-yellow-300">
-                        Run {r.run_id?.slice(0, 8)}: {r.issue || "flagged"}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {crossRunIntegrity.anomalies?.length > 0 && (
-                  <div className="space-y-1">
-                    {crossRunIntegrity.anomalies.map((a: any, i: number) => (
-                      <div key={i} className="text-[10px] text-red-300 bg-red-500/10 rounded px-2 py-1">{a}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Tuning Recommendations (#12, #13) */}
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-            <h2 className="text-lg font-semibold mb-4">🎛️ Tuning Recommendations</h2>
-            {!tuningRecs ? (
-              <div className="text-slate-400 text-sm text-center py-4">Loading tuning data...</div>
-            ) : (
-              <div className="space-y-2">
-                {tuningRecs.recommendations?.length > 0 ? (
-                  tuningRecs.recommendations.slice(0, 5).map((r: any, i: number) => (
-                    <div key={i} className="text-xs bg-cyan-500/10 border border-cyan-500/20 rounded px-3 py-2 text-cyan-200">
-                      {typeof r === "string" ? r : (
-                        <div>
-                          <span className="font-semibold">{r.parameter || r.name}</span>: {r.suggestion || r.value || r.description}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-slate-400 text-sm text-center py-2">No recommendations available</div>
-                )}
-                {tuningRecs.confidence != null && (
-                  <div className="text-[10px] text-slate-500">Confidence: {(tuningRecs.confidence * 100).toFixed(0)}%</div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Optimization Envelope (#7) */}
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-            <h2 className="text-lg font-semibold mb-4">📊 Optimization Envelope</h2>
-            {!optimizationEnvelope ? (
-              <div className="text-slate-400 text-sm text-center py-4">Loading optimization data...</div>
-            ) : (
-              <div className="space-y-2">
-                {optimizationEnvelope.speed_range && (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Speed Range</span>
-                    <span className="text-slate-300 font-mono">{optimizationEnvelope.speed_range.min?.toFixed(2)} – {optimizationEnvelope.speed_range.max?.toFixed(2)} m/s</span>
-                  </div>
-                )}
-                {optimizationEnvelope.safety_margin != null && (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Safety Margin</span>
-                    <span className="text-slate-300 font-mono">{optimizationEnvelope.safety_margin?.toFixed?.(2) || optimizationEnvelope.safety_margin}m</span>
-                  </div>
-                )}
-                {optimizationEnvelope.constraints && (
-                  <div className="text-[10px] text-slate-500 space-y-0.5 mt-1">
-                    {Object.entries(optimizationEnvelope.constraints).map(([k, v]) => (
-                      <div key={k} className="flex justify-between">
-                        <span>{k.replace(/_/g, " ")}</span>
-                        <span className="font-mono text-slate-400">{String(v)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+function Row({ k, v }: { k: React.ReactNode; v: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-mc-dim text-xs">{k}</span>
+      <span className="text-right text-[13px] font-medium">{v}</span>
     </div>
   );
 }

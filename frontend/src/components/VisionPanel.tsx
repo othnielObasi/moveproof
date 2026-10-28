@@ -14,7 +14,7 @@ const VERDICT: Record<Check["verdict"], { text: string; cls: string }> = {
   agree: { text: "Agrees with sensors", cls: "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" },
   missed_hazard: { text: "Missed a hazard", cls: "text-red-300 border-red-500/40 bg-red-500/10" },
   unconfirmed_sighting: { text: "Unconfirmed sighting", cls: "text-amber-300 border-amber-500/40 bg-amber-500/10" },
-  no_answer: { text: "No answer", cls: "text-slate-300 border-slate-500/40 bg-slate-500/10" },
+  no_answer: { text: "No answer", cls: "text-mc-ink/85 border-mc-line2/40 bg-slate-500/10" },
 };
 
 const COLOUR: Record<string, string> = { person: "#f0781e", forklift: "#ebbe14", spill: "#6ed2eb", pallet: "#965f2d" };
@@ -24,7 +24,7 @@ function Plot({ check }: { check: Check }) {
   const S = 132, view = 12, scale = S / view, ox = S / 2, oy = S * 0.72;
   const px = (o: Obj) => ({ x: ox + o.right_m * scale, y: oy - o.ahead_m * scale });
   return (
-    <svg viewBox={`0 0 ${S} ${S}`} className="w-[132px] h-[132px] shrink-0 rounded-md bg-slate-900/80 border border-slate-700" role="img"
+    <svg viewBox={`0 0 ${S} ${S}`} className="w-[132px] h-[132px] shrink-0 rounded-md bg-mc-bg/80 border border-mc-line" role="img"
       aria-label="Vision check: sensor objects as rings, model sightings as dots, robot at the bottom facing up">
       <polygon points={`${ox},${oy - 6} ${ox - 5},${oy + 4} ${ox + 5},${oy + 4}`} fill="#3b82f6" />
       {check.truth.map((o, i) => { const p = px(o); return <circle key={`t${i}`} cx={p.x} cy={p.y} r={5} fill="none" stroke={COLOUR[o.type] || "#94a3b8"} strokeWidth={1.5} />; })}
@@ -79,19 +79,19 @@ export function VisionPanel({ runId }: { runId?: string }) {
   }
 
   return (
-    <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-4">
+    <div className="bg-mc-panel/60 rounded-xl border border-mc-line p-4">
       <div className="flex items-center justify-between mb-2 gap-2">
-        <h3 className="text-sm font-bold text-slate-100 tracking-wide uppercase">Vision check</h3>
-        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${status.enabled ? "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" : "text-slate-300 border-slate-500/40"}`}>
+        <h3 className="text-sm font-bold text-mc-ink tracking-wide uppercase">Vision check</h3>
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${status.enabled ? "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" : "text-mc-ink/85 border-mc-line2/40"}`}>
           {status.enabled ? shortModel : "Off (needs Nebius key)"}
         </span>
       </div>
-      <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+      <p className="text-[11px] text-mc-mute mb-3 leading-relaxed">
         An NVIDIA vision model reads the robot camera every {status.interval_s ?? 5}s during a run. Its answer is checked against the sensors and never trusted on its own: anything it sees that the sensors don&apos;t can only slow the robot.
       </p>
 
       {!last ? (
-        <div className="text-xs text-slate-500 mb-2">No vision checks yet. They run while a mission is active.</div>
+        <div className="text-xs text-mc-dim mb-2">No vision checks yet. They run while a mission is active.</div>
       ) : (
         <div className="flex gap-3 mb-2">
           <Plot check={last} />
@@ -99,10 +99,10 @@ export function VisionPanel({ runId }: { runId?: string }) {
             <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full border ${VERDICT[last.verdict]?.cls}`}>
               {VERDICT[last.verdict]?.text ?? last.verdict}
             </span>
-            <div className="text-slate-400 font-mono text-[10px]">
+            <div className="text-mc-mute font-mono text-[10px]">
               {last.latency_ms != null ? `${last.latency_ms} ms` : "—"} · {new Date(last.ts * 1000).toLocaleTimeString()}
             </div>
-            <div className="text-slate-300">Matched: {last.matched.length ? list(last.matched) : "nothing in view"}</div>
+            <div className="text-mc-ink/85">Matched: {last.matched.length ? list(last.matched) : "nothing in view"}</div>
             {last.missed.length > 0 && <div className="text-red-300">Missed: {list(last.missed)} (gate kept using sensors)</div>}
             {last.unconfirmed.length > 0 && <div className="text-amber-300">Unconfirmed: {list(last.unconfirmed)} (slowed nearby)</div>}
           </div>
@@ -114,7 +114,7 @@ export function VisionPanel({ runId }: { runId?: string }) {
       )}
 
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-slate-500">rings = sensors · dots = model · red dashes = missed</span>
+        <span className="text-[10px] text-mc-dim">rings = sensors · dots = model · red dashes = missed</span>
         {status.enabled && (
           <button onClick={checkNow} disabled={checking}
             className="text-[11px] px-2.5 py-1 rounded-md border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50">

@@ -1,345 +1,182 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  listMissions,
-  startRun,
-  updateMission,
-  deleteMission,
-  pauseMission,
-  resumeMission,
-  replayMission,
-  getWorld,
-} from "@/lib/api";
 import { useRouter } from "next/navigation";
+import {
+  createMission, deleteMission, getWorld, listMissions, pauseMission, replayMission, resumeMission, startRun, updateMission,
+} from "@/lib/api";
 import type { Mission, MissionStatus } from "@/lib/types";
+import { Button, Empty, Mono, Notice, Page, PageHeader, Panel, Pill, Tabs, Verdict, cx } from "@/components/ui";
 
-/* ── Bay resolver (same logic as run page) ── */
 const BAY_PATTERN = /\b([ABSR])-?(\d{1,2})\b/i;
 function resolveBayGoal(text: string, bays: any[]): { x: number; y: number } | null {
-  if (!text || !bays?.length) return null;
-  const match = text.match(BAY_PATTERN);
-  if (!match) return null;
-  const prefix = match[1].toUpperCase();
-  const num = match[2].padStart(2, "0");
-  const bayId = `${prefix}-${num}`;
-  const bay = bays.find((b: any) => b.id?.toUpperCase() === bayId);
-  if (bay && typeof bay.x === "number") return { x: bay.x, y: bay.y };
-  return null;
+  const m = text?.match(BAY_PATTERN);
+  if (!m || !bays?.length) return null;
+  const bay = bays.find((b: any) => b.id?.toUpperCase() === `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}`);
+  return bay && typeof bay.x === "number" ? { x: bay.x, y: bay.y } : null;
 }
 
-const STATUS_BADGE: Record<MissionStatus, { label: string; cls: string }> = {
-  draft:     { label: "Draft",      cls: "bg-slate-600 text-slate-200" },
-  executing: { label: "Executing",  cls: "bg-green-600 text-white animate-pulse" },
-  paused:    { label: "Paused",     cls: "bg-yellow-600 text-white" },
-  completed: { label: "Completed",  cls: "bg-cyan-700 text-white" },
-  deleted:   { label: "Deleted",    cls: "bg-red-800 text-red-200" },
-};
+const PRESETS = [
+  { title: "Deliver pallet to dock B-03", bay: "B-03" },
+  { title: "Pick items from rack A-04", bay: "A-04" },
+  { title: "Restock rack A-08", bay: "A-08" },
+  { title: "Move goods to staging S-01", bay: "S-01" },
+  { title: "Hazmat container to dock B-05", bay: "B-05" },
+];
+
+const STATUS_LABEL: Record<string, string> = { draft: "DRAFT", executing: "RUNNING", paused: "PAUSED", completed: "COMPLETED", deleted: "DELETED", failed: "FAILED" };
 
 export default function MissionsPage() {
   const router = useRouter();
   const [missions, setMissions] = useState<Mission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilterState] = useState<"all" | MissionStatus>("all");
+  const setFilter = (v: string) => setFilterState(v as any);
+  const [bays, setBays] = useState<any[]>([]);
+  // create
+  const [title, setTitle] = useState(PRESETS[0].title);
+  const [bayId, setBayId] = useState(PRESETS[0].bay);
+  const [creating, setCreating] = useState(false);
+  // edit
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
-  const [editGoalX, setEditGoalX] = useState(0);
-  const [editGoalY, setEditGoalY] = useState(0);
-  const [filter, setFilter] = useState<"all" | MissionStatus>("all");
-  const [bays, setBays] = useState<any[]>([]);
+  const [editGoal, setEditGoal] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   async function reload() {
+    try { setMissions(await listMissions()); } catch { setError("Failed to load missions"); } finally { setLoading(false); }
+  }
+  useEffect(() => { reload(); getWorld().then((w: any) => setBays(w?.bays || [])).catch(() => {}); }, []);
+
+  const act = (fn: () => Promise<any>) => async () => {
+    setError(null);
+    try { await fn(); } catch (e: any) { setError(e.message || "That didn't work"); }
+  };
+
+  async function create(start: boolean) {
+    setCreating(true); setError(null);
     try {
-      setMissions(await listMissions());
-    } catch {
-      setError("Failed to load missions");
-    } finally {
-      setLoading(false);
-    }
+      const m = await createMission({ title, bay_id: bayId || undefined } as any);
+      if (start) {
+        const r = await startRun(m.id);
+        router.push(`/runs/${r.run_id}`);
+        return;
+      }
+      setMissions((prev) => [m, ...prev]);
+    } catch (e: any) { setError(e.message); } finally { setCreating(false); }
   }
 
-  useEffect(() => {
-    reload();
-    // Also fetch bays for goal auto-resolution
-    getWorld().then((w: any) => setBays(w?.bays || [])).catch(() => {});
-  }, []);
-
-  async function handleStartRun(missionId: string) {
-    try {
-      const data = await startRun(missionId);
-      router.push(`/runs/${data.run_id}`);
-    } catch (e: any) {
-      setError(e.message || "Failed to start run");
-    }
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this mission?")) return;
-    try {
-      await deleteMission(id);
-      setMissions((prev) => prev.filter((m) => m.id !== id));
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
-  async function handlePause(id: string) {
-    try {
-      const updated = await pauseMission(id);
-      setMissions((prev) => prev.map((m) => (m.id === id ? updated : m)));
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
-  async function handleResume(id: string) {
-    try {
-      const updated = await resumeMission(id);
-      setMissions((prev) => prev.map((m) => (m.id === id ? updated : m)));
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
-  async function handleReplay(id: string) {
-    try {
-      const updated = await replayMission(id);
-      setMissions((prev) => prev.map((m) => (m.id === id ? updated : m)));
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
-  function startEdit(m: Mission) {
-    setEditingId(m.id);
-    setEditTitle(m.title);
-    // Auto-resolve bay from title, else use existing goal
-    const resolved = resolveBayGoal(m.title, bays);
-    setEditGoalX(resolved?.x ?? m.goal?.x ?? 0);
-    setEditGoalY(resolved?.y ?? m.goal?.y ?? 0);
-  }
-
-  async function saveEdit(id: string) {
-    try {
-      const updated = await updateMission(id, {
-        title: editTitle,
-        goal: { x: editGoalX, y: editGoalY },
-      });
-      setMissions((prev) => prev.map((m) => (m.id === id ? updated : m)));
-      setEditingId(null);
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: missions.length };
+    missions.forEach((m) => { c[m.status] = (c[m.status] || 0) + 1; });
+    return c;
+  }, [missions]);
   const filtered = filter === "all" ? missions : missions.filter((m) => m.status === filter);
+  const bayGroups = useMemo(() => {
+    const g: Record<string, any[]> = {};
+    bays.forEach((b) => { const k = b.type || "bay"; (g[k] = g[k] || []).push(b); });
+    return g;
+  }, [bays]);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">All Missions</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {missions.length} mission{missions.length !== 1 ? "s" : ""} total
-          </p>
+    <Page wide>
+      <PageHeader eyebrow="Missions" title="Missions"
+        subtitle="A mission is a destination for the robot. Nemotron plans the route; the gate approves every move before it runs."
+        actions={<Button href="/twin">Pick a bay on the warehouse →</Button>} />
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        {/* Create */}
+        <Panel title="New mission" className="lg:self-start">
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {PRESETS.map((p) => (
+              <button key={p.bay} onClick={() => { setTitle(p.title); setBayId(p.bay); }}
+                className={cx("rounded-md border px-2.5 py-1 text-xs", bayId === p.bay && title === p.title ? "border-mc-accent bg-mc-accent/10 text-mc-ink" : "border-mc-line2 text-mc-mute hover:text-mc-ink")}>
+                {p.title}
+              </button>
+            ))}
+          </div>
+          <label className="block text-xs text-mc-dim mb-1" htmlFor="m-title">Instruction for the planner</label>
+          <input id="m-title" value={title} onChange={(e) => { setTitle(e.target.value); const g = e.target.value.match(BAY_PATTERN); if (g) setBayId(`${g[1].toUpperCase()}-${g[2].padStart(2, "0")}`); }}
+            className="w-full rounded-lg bg-mc-raise border border-mc-line2 px-3 py-2 text-sm focus:outline-none focus:border-mc-accent" />
+          <label className="block text-xs text-mc-dim mt-3 mb-1" htmlFor="m-bay">Destination bay</label>
+          <select id="m-bay" value={bayId} onChange={(e) => setBayId(e.target.value)}
+            className="w-full rounded-lg bg-mc-raise border border-mc-line2 px-3 py-2 text-sm">
+            {Object.entries(bayGroups).map(([type, list]) => (
+              <optgroup key={type} label={type}>
+                {list.map((b) => <option key={b.id} value={b.id}>{b.id} · ({b.x}, {b.y})</option>)}
+              </optgroup>
+            ))}
+            {bays.length === 0 && <option value={bayId}>{bayId}</option>}
+          </select>
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <Button onClick={() => create(false)} disabled={creating || !title.trim()}>Save draft</Button>
+            <Button variant="primary" onClick={() => create(true)} disabled={creating || !title.trim()}>{creating ? "Starting…" : "Start governed run"}</Button>
+          </div>
+          <p className="mt-3 text-[11px] text-mc-dim leading-relaxed">On the public demo the robot is shared: if a mission is already running you&apos;ll be pointed to it.</p>
+        </Panel>
+
+        {/* List */}
+        <div className="lg:col-span-2 space-y-3">
+          <Tabs value={filter} onChange={setFilter} tabs={(["all", "draft", "executing", "paused", "completed"] as const).map((f) => ({
+            id: f, label: f === "all" ? "All" : f === "executing" ? "Running" : f[0].toUpperCase() + f.slice(1), count: counts[f] || 0,
+          }))} />
+          {error && <Notice tone="stop">{error} <button onClick={() => setError(null)} className="underline ml-2">dismiss</button></Notice>}
+          {loading ? <div className="text-sm text-mc-dim py-6">Loading missions…</div> : filtered.length === 0 ? (
+            <Panel><Empty title={`No ${filter === "all" ? "" : filter} missions`}>Create one on the left, or pick a bay in the live warehouse.</Empty></Panel>
+          ) : (
+            <Panel padded={false}>
+              <ul className="divide-y divide-mc-line">
+                {filtered.map((m) => {
+                  const editable = m.status === "draft" || m.status === "paused";
+                  return (
+                    <li key={m.id} className="px-4 py-3">
+                      {editingId === m.id ? (
+                        <div className="flex flex-wrap items-end gap-2">
+                          <label className="flex-1 min-w-[200px] text-xs text-mc-dim">Instruction
+                            <input value={editTitle} onChange={(e) => { setEditTitle(e.target.value); const g = resolveBayGoal(e.target.value, bays); if (g) setEditGoal(g); }}
+                              className="mt-1 w-full rounded-lg bg-mc-raise border border-mc-line2 px-3 py-1.5 text-sm text-mc-ink" /></label>
+                          <label className="w-20 text-xs text-mc-dim">X<input type="number" value={editGoal.x} onChange={(e) => setEditGoal({ ...editGoal, x: Number(e.target.value) })}
+                            className="mt-1 w-full rounded-lg bg-mc-raise border border-mc-line2 px-2 py-1.5 text-sm text-mc-ink" /></label>
+                          <label className="w-20 text-xs text-mc-dim">Y<input type="number" value={editGoal.y} onChange={(e) => setEditGoal({ ...editGoal, y: Number(e.target.value) })}
+                            className="mt-1 w-full rounded-lg bg-mc-raise border border-mc-line2 px-2 py-1.5 text-sm text-mc-ink" /></label>
+                          <Button variant="primary" onClick={act(async () => { const u = await updateMission(m.id, { title: editTitle, goal: editGoal }); setMissions((p) => p.map((x) => (x.id === m.id ? u : x))); setEditingId(null); })}>Save</Button>
+                          <Button variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <Verdict value={STATUS_LABEL[m.status] || m.status} />
+                              <span className="font-medium truncate">{m.title}</span>
+                            </div>
+                            <div className="mt-1 text-xs text-mc-dim flex flex-wrap gap-x-3">
+                              <Mono className="text-mc-dim">{m.id}</Mono>
+                              {m.goal && <span>goal ({m.goal.x}, {m.goal.y}){m.goal.zone ? ` · ${m.goal.zone}` : ""}</span>}
+                              <span>{new Date(m.created_at).toLocaleString()}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {editable && <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => { setEditingId(m.id); setEditTitle(m.title); setEditGoal(resolveBayGoal(m.title, bays) || { x: m.goal?.x ?? 0, y: m.goal?.y ?? 0 }); }}>Edit</Button>}
+                            {(m.status === "draft" || m.status === "paused") && <Button variant="primary" className="px-2.5 py-1 text-xs" onClick={act(async () => { const r = await startRun(m.id); router.push(`/runs/${r.run_id}`); })}>{m.status === "paused" ? "Re-run" : "Run"}</Button>}
+                            {m.status === "executing" && <Button className="px-2.5 py-1 text-xs" onClick={act(async () => { const u = await pauseMission(m.id); setMissions((p) => p.map((x) => (x.id === m.id ? u : x))); })}>Pause</Button>}
+                            {m.status === "paused" && <Button className="px-2.5 py-1 text-xs" onClick={act(async () => { const u = await resumeMission(m.id); setMissions((p) => p.map((x) => (x.id === m.id ? u : x))); })}>Resume</Button>}
+                            {m.status === "completed" && <Button className="px-2.5 py-1 text-xs" onClick={act(async () => { const u = await replayMission(m.id); setMissions((p) => p.map((x) => (x.id === m.id ? u : x))); })}>Replay</Button>}
+                            {(m.status === "draft" || m.status === "paused" || m.status === "completed") && (
+                              <Button variant="ghost" className="px-2 py-1 text-xs text-mc-stop" onClick={act(async () => { if (!confirm("Delete this mission?")) return; await deleteMission(m.id); setMissions((p) => p.filter((x) => x.id !== m.id)); })}>Delete</Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </Panel>
+          )}
+          <div className="text-xs text-mc-dim">Looking for results? <Link href="/runs" className="text-mc-accent hover:underline">Every run</Link> keeps its full decision record.</div>
         </div>
-        <Link
-          href="/"
-          className="bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
-        >
-          + New Mission
-        </Link>
       </div>
-
-      {/* Filters */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {(["all", "draft", "executing", "paused", "completed"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-              filter === f
-                ? "bg-cyan-500 text-white"
-                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-            }`}
-          >
-            {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-4 mb-6 text-sm text-red-400">
-          {error}
-          <button onClick={() => setError(null)} className="ml-3 underline text-xs">dismiss</button>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-center py-12 text-slate-400">Loading missions...</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">
-          <div className="text-4xl mb-2">📭</div>
-          <div>No {filter !== "all" ? filter : ""} missions found.</div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map((m) => {
-            const badge = STATUS_BADGE[m.status] || STATUS_BADGE.draft;
-            const isEditing = editingId === m.id;
-            const editable = m.status === "draft" || m.status === "paused";
-
-            return (
-              <div
-                key={m.id}
-                className="bg-slate-800 border border-slate-700 rounded-xl p-5"
-              >
-                {isEditing ? (
-                  /* Inline edit form */
-                  <div className="space-y-3">
-                    <input
-                      className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500"
-                      value={editTitle}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditTitle(val);
-                        // Auto-resolve bay coordinates from title
-                        const resolved = resolveBayGoal(val, bays);
-                        if (resolved) {
-                          setEditGoalX(resolved.x);
-                          setEditGoalY(resolved.y);
-                        }
-                      }}
-                      placeholder="Mission title (e.g. Navigate to B-03)"
-                    />
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <label className="text-xs text-slate-400">Goal X</label>
-                        <input
-                          type="number"
-                          className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-white text-sm"
-                          value={editGoalX}
-                          onChange={(e) => setEditGoalX(Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-xs text-slate-400">Goal Y</label>
-                        <input
-                          type="number"
-                          className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-white text-sm"
-                          value={editGoalY}
-                          onChange={(e) => setEditGoalY(Number(e.target.value))}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => saveEdit(m.id)}
-                        className="bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold px-4 py-2 rounded-lg"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="bg-slate-600 hover:bg-slate-500 text-white text-xs px-4 py-2 rounded-lg"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  /* Normal view */
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold text-white truncate">{m.title}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
-                          {badge.label}
-                        </span>
-                      </div>
-                      <div className="text-sm text-slate-400">
-                        <span className="font-mono text-xs text-slate-500">{m.id}</span>
-                        {m.goal && (
-                          <span className="ml-3">
-                            Goal: ({m.goal.x}, {m.goal.y}){m.goal?.zone && <span className="ml-1 text-cyan-400">[{m.goal.zone}]</span>}
-                          </span>
-                        )}
-                        <span className="ml-3">
-                          {new Date(m.created_at).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {editable && (
-                        <button
-                          onClick={() => startEdit(m)}
-                          className="text-slate-400 hover:text-white text-xs px-2 py-1.5 rounded border border-slate-600 hover:border-slate-500 transition"
-                          title="Edit"
-                        >
-                          ✏️ Edit
-                        </button>
-                      )}
-                      {m.status === "draft" && (
-                        <button
-                          onClick={() => handleStartRun(m.id)}
-                          className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium transition text-xs"
-                        >
-                          ▶ Execute
-                        </button>
-                      )}
-                      {m.status === "executing" && (
-                        <button
-                          onClick={() => handlePause(m.id)}
-                          className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg font-medium transition text-xs"
-                        >
-                          ⏸ Pause
-                        </button>
-                      )}
-                      {m.status === "paused" && (
-                        <>
-                          <button
-                            onClick={() => handleResume(m.id)}
-                            className="bg-cyan-500 hover:bg-cyan-600 text-white px-3 py-1.5 rounded-lg font-medium transition text-xs"
-                          >
-                            ▶ Resume
-                          </button>
-                          <button
-                            onClick={() => handleStartRun(m.id)}
-                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium transition text-xs"
-                          >
-                            🔄 Re-run
-                          </button>
-                        </>
-                      )}
-                      {m.status === "completed" && (
-                        <button
-                          onClick={() => handleReplay(m.id)}
-                          className="bg-cyan-500 hover:bg-cyan-600 text-white px-3 py-1.5 rounded-lg font-medium transition text-xs"
-                        >
-                          🔄 Replay
-                        </button>
-                      )}
-                      {(m.status === "draft" || m.status === "paused" || m.status === "completed") && (
-                        <button
-                          onClick={() => handleDelete(m.id)}
-                          className="text-red-400 hover:text-red-300 text-xs px-2 py-1.5 rounded border border-red-800 hover:border-red-600 transition"
-                          title="Delete"
-                        >
-                          🗑
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    </Page>
   );
 }

@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { PageHeader } from "@/components/ui";
+import { EvidenceNav } from "@/components/EvidenceNav";
 import {
   listRuns,
   getComplianceReport,
@@ -109,35 +111,23 @@ export default function CompliancePage() {
   const fw = frameworks.find((f) => f.id === selectedFramework);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Compliance Reports</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            SHA-256 hash chain audit trail &middot; Regulatory framework alignment
-          </p>
-        </div>
-        <Link
-          href="/audit"
-          className="text-sm text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-3 py-1.5 rounded-lg"
-        >
-          View Audit Trail &rarr;
-        </Link>
-      </div>
+    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <PageHeader eyebrow="Evidence" title="Compliance reports"
+        subtitle="A run's decisions mapped to ISO/IEC 42001, the EU AI Act and the NIST AI RMF, with hash-chain verification." />
+      <EvidenceNav />
 
       {/* Controls */}
-      <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 mb-6">
+      <div className="bg-mc-panel/60 border border-mc-line rounded-xl p-5 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Run selector */}
           <div>
-            <label className="block text-xs text-slate-400 mb-1 font-medium uppercase tracking-wider">
+            <label className="block text-xs text-mc-mute mb-1 font-medium uppercase tracking-wider">
               Run
             </label>
             <select
               value={selectedRun}
               onChange={(e) => setSelectedRun(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
+              className="w-full bg-mc-raise border border-mc-line2 rounded-lg px-3 py-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
             >
               {runs.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -149,13 +139,13 @@ export default function CompliancePage() {
 
           {/* Framework selector */}
           <div>
-            <label className="block text-xs text-slate-400 mb-1 font-medium uppercase tracking-wider">
+            <label className="block text-xs text-mc-mute mb-1 font-medium uppercase tracking-wider">
               Framework
             </label>
             <select
               value={selectedFramework}
               onChange={(e) => setSelectedFramework(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
+              className="w-full bg-mc-raise border border-mc-line2 rounded-lg px-3 py-2 text-sm focus:ring-cyan-500 focus:border-cyan-500"
             >
               {frameworks.map((f) => (
                 <option key={f.id} value={f.id}>
@@ -163,7 +153,7 @@ export default function CompliancePage() {
                 </option>
               ))}
             </select>
-            {fw && <p className="text-xs text-slate-500 mt-1">{fw.description}</p>}
+            {fw && <p className="text-xs text-mc-dim mt-1">{fw.description}</p>}
           </div>
 
           {/* Generate button */}
@@ -171,7 +161,7 @@ export default function CompliancePage() {
             <button
               onClick={handleGenerate}
               disabled={loading || !selectedRun}
-              className="w-full bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+              className="w-full bg-cyan-600 hover:bg-cyan-500 disabled:bg-mc-line2 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             >
               {loading ? "Generating..." : "Generate Report"}
             </button>
@@ -211,12 +201,12 @@ export default function CompliancePage() {
                       ? "SHA-256 Hash Chain Verified"
                       : "Hash Chain Integrity Failure"}
                   </div>
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs text-mc-mute">
                     {verify.total_entries} entries &middot; Verified at{" "}
                     {new Date(verify.verified_at).toLocaleString()}
                   </div>
                 </div>
-                <div className="ml-auto text-right text-xs text-slate-500 font-mono hidden md:block">
+                <div className="ml-auto text-right text-xs text-mc-dim font-mono hidden md:block">
                   <div>First: {verify.first_hash}</div>
                   <div>Last: {verify.last_hash}</div>
                 </div>
@@ -225,17 +215,17 @@ export default function CompliancePage() {
           )}
 
           {/* Report Header */}
-          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 mb-6">
+          <div className="bg-mc-panel/60 border border-mc-line rounded-xl p-5 mb-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-bold">
                   {fw?.name || selectedFramework} Compliance Report
                 </h2>
-                <p className="text-xs text-slate-400 font-mono mt-1">
+                <p className="text-xs text-mc-mute font-mono mt-1">
                   Report ID: {report.report_id}
                 </p>
               </div>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-mc-dim">
                 Generated {new Date(report.generated_at).toLocaleString()}
               </span>
             </div>
@@ -270,18 +260,18 @@ export default function CompliancePage() {
 
           {/* Policy Violations Breakdown */}
           {Object.keys(report.metrics.violations_by_policy).length > 0 && (
-            <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 mb-6">
-              <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">
+            <div className="bg-mc-panel/60 border border-mc-line rounded-xl p-5 mb-6">
+              <h3 className="text-sm font-semibold text-mc-ink/85 mb-3 uppercase tracking-wider">
                 Policy Violations Breakdown
               </h3>
               <div className="space-y-2">
                 {Object.entries(report.metrics.violations_by_policy).map(([pid, count]) => (
                   <div
                     key={pid}
-                    className="flex items-center justify-between bg-slate-700/50 px-4 py-2 rounded-lg"
+                    className="flex items-center justify-between bg-mc-raise/50 px-4 py-2 rounded-lg"
                   >
                     <span className="text-sm font-mono text-yellow-300">{pid}</span>
-                    <span className="text-sm text-slate-300">
+                    <span className="text-sm text-mc-ink/85">
                       {count} violation{count !== 1 ? "s" : ""}
                     </span>
                   </div>
@@ -291,15 +281,15 @@ export default function CompliancePage() {
           )}
 
           {/* Audit Entries (collapsible) */}
-          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5">
+          <div className="bg-mc-panel/60 border border-mc-line rounded-xl p-5">
             <button
               onClick={() => setShowEntries(!showEntries)}
               className="flex items-center justify-between w-full"
             >
-              <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+              <h3 className="text-sm font-semibold text-mc-ink/85 uppercase tracking-wider">
                 Audit Hash Chain ({report.audit_entries.length} entries)
               </h3>
-              <span className="text-slate-400 text-sm">
+              <span className="text-mc-mute text-sm">
                 {showEntries ? "▲ Collapse" : "▼ Expand"}
               </span>
             </button>
@@ -308,7 +298,7 @@ export default function CompliancePage() {
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-left text-slate-400 border-b border-slate-700">
+                    <tr className="text-left text-mc-mute border-b border-mc-line">
                       <th className="pb-2 pr-3">#</th>
                       <th className="pb-2 pr-3">Timestamp</th>
                       <th className="pb-2 pr-3">Action</th>
@@ -321,10 +311,10 @@ export default function CompliancePage() {
                     {report.audit_entries.slice(0, 50).map((entry, i) => (
                       <tr
                         key={entry.decision_id}
-                        className="border-b border-slate-700/50 hover:bg-slate-700/30"
+                        className="border-b border-mc-line/50 hover:bg-mc-raise/30"
                       >
-                        <td className="py-1.5 pr-3 text-slate-500">{i + 1}</td>
-                        <td className="py-1.5 pr-3 text-slate-300">
+                        <td className="py-1.5 pr-3 text-mc-dim">{i + 1}</td>
+                        <td className="py-1.5 pr-3 text-mc-ink/85">
                           {new Date(entry.timestamp).toLocaleTimeString()}
                         </td>
                         <td className="py-1.5 pr-3 font-mono">{entry.action_type}</td>
@@ -352,7 +342,7 @@ export default function CompliancePage() {
                             {entry.risk_score.toFixed(2)}
                           </span>
                         </td>
-                        <td className="py-1.5 font-mono text-slate-500 max-w-[180px] truncate">
+                        <td className="py-1.5 font-mono text-mc-dim max-w-[180px] truncate">
                           {entry.hash.slice(0, 16)}...
                         </td>
                       </tr>
@@ -360,7 +350,7 @@ export default function CompliancePage() {
                   </tbody>
                 </table>
                 {report.audit_entries.length > 50 && (
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="text-xs text-mc-dim mt-2">
                     Showing first 50 of {report.audit_entries.length} entries
                   </p>
                 )}
@@ -372,7 +362,7 @@ export default function CompliancePage() {
 
       {/* Empty state */}
       {!report && !loading && !error && (
-        <div className="text-center py-16 text-slate-500">
+        <div className="text-center py-16 text-mc-dim">
           <div className="text-4xl mb-3">📋</div>
           <p className="text-lg font-medium">Select a run and generate a compliance report</p>
           <p className="text-sm mt-1">
@@ -399,14 +389,14 @@ function MetricCard({
   const bgMap: Record<string, string> = {
     "text-green-400": "bg-green-500/10 border-green-500/20",
     "text-red-400": "bg-red-500/10 border-red-500/20",
-    "text-white": "bg-slate-700/40 border-slate-700",
+    "text-white": "bg-mc-raise/40 border-mc-line",
   };
   const bg = bgMap[color] || bgMap["text-white"];
   return (
     <div className={`rounded-xl p-5 border ${bg}`}>
-      <div className="text-xs text-slate-400 uppercase tracking-wider font-medium">{label}</div>
+      <div className="text-xs text-mc-mute uppercase tracking-wider font-medium">{label}</div>
       <div className={`text-4xl font-bold mt-2 ${color}`}>{value}</div>
-      <div className="text-sm text-slate-500 mt-1">{sub}</div>
+      <div className="text-sm text-mc-dim mt-1">{sub}</div>
     </div>
   );
 }

@@ -71,21 +71,21 @@ export function SiteIntelPanel() {
   }
 
   return (
-    <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-4">
+    <div className="bg-mc-panel/60 rounded-xl border border-mc-line p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-slate-100 tracking-wide uppercase">Site intelligence</h3>
+        <h3 className="text-sm font-bold text-mc-ink tracking-wide uppercase">Site intelligence</h3>
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${liveMode ? "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" : "text-amber-300 border-amber-500/40 bg-amber-500/10"}`}>
           {liveMode ? "Tavily live" : "Offline samples"}
         </span>
       </div>
-      <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+      <p className="text-[11px] text-mc-mute mb-3 leading-relaxed">
         Hazard guidance is looked up with Tavily from authoritative safety publishers, screened as untrusted, and can only make the rules stricter. The gate never reads outside text.
       </p>
 
       {/* zones in force */}
       <div className="space-y-2 mb-3">
         {zones.length === 0 ? (
-          <div className="text-xs text-slate-500">No hazard zones in force.</div>
+          <div className="text-xs text-mc-dim">No hazard zones in force.</div>
         ) : (
           zones.map((z) => (
             <div key={z.id} className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5">
@@ -93,11 +93,11 @@ export function SiteIntelPanel() {
                 <span className="text-xs font-bold text-red-200">No entry · {z.label}</span>
                 <span className="text-[10px] text-red-200/80 font-mono">{z.radius.toFixed(1)} m · ≤{z.max_speed.toFixed(1)} m/s within {z.slow_radius.toFixed(1)} m</span>
               </div>
-              <div className="text-[11px] text-slate-300 mt-1">{z.basis}</div>
+              <div className="text-[11px] text-mc-ink/85 mt-1">{z.basis}</div>
               {z.sources?.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {z.sources.map((d) => (
-                    <span key={d} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900/70 text-emerald-300 border border-emerald-500/30">✓ {d}</span>
+                    <span key={d} className="text-[10px] px-1.5 py-0.5 rounded bg-mc-bg/70 text-emerald-300 border border-emerald-500/30">✓ {d}</span>
                   ))}
                   {!z.live && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">sample data</span>}
                 </div>
@@ -109,17 +109,17 @@ export function SiteIntelPanel() {
 
       {/* lookups */}
       {lookups.map((lk, i) => (
-        <div key={lk.at} className="rounded-lg border border-slate-700 bg-slate-900/40 mb-2">
+        <div key={lk.at} className="rounded-lg border border-mc-line bg-mc-bg/40 mb-2">
           <button onClick={() => setOpen(open === i ? null : i)} className="w-full flex items-center justify-between px-2.5 py-2 text-left">
-            <span className="text-xs text-slate-200">
+            <span className="text-xs text-mc-ink">
               <span className="font-semibold">Lookup:</span> {lk.substance}
-              <span className="text-slate-500"> · {lk.results.length} sources · {lk.results.filter((r) => r.verdict === "quarantined").length} quarantined</span>
+              <span className="text-mc-dim"> · {lk.results.length} sources · {lk.results.filter((r) => r.verdict === "quarantined").length} quarantined</span>
             </span>
-            <span className="text-slate-500 text-xs">{open === i ? "▾" : "▸"}</span>
+            <span className="text-mc-dim text-xs">{open === i ? "▾" : "▸"}</span>
           </button>
           {open === i && (
             <div className="px-2.5 pb-2.5 space-y-1.5">
-              <div className="text-[10px] font-mono text-slate-500 break-words">
+              <div className="text-[10px] font-mono text-mc-dim break-words">
                 {lk.mode === "live" ? `Tavily · ${Math.round(lk.tavily.latency_ms)} ms${lk.tavily.credits != null ? ` · ${lk.tavily.credits} credits` : ""}` : lk.mode === "offline_sample" ? "Offline sample text (no TAVILY_API_KEY)" : `Live search failed (${lk.tavily.error}); offline samples used`}
                 {" · "}“{lk.query}”
               </div>
@@ -128,11 +128,11 @@ export function SiteIntelPanel() {
                   <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-200 border border-red-500/30">{nice(c)} · {lk.assessment.evidence[c]?.length} sources · enforced</span>
                 ))}
                 {lk.assessment.classes_advisory.map((c) => (
-                  <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-300 border border-slate-600">{nice(c)} · 1 source · advice only</span>
+                  <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-mc-raise/60 text-mc-ink/85 border border-mc-line2">{nice(c)} · 1 source · advice only</span>
                 ))}
               </div>
               {lk.results.map((r) => (
-                <div key={r.url} className={`rounded border px-2 py-1.5 ${r.verdict === "quarantined" ? "border-red-500/40 bg-red-500/5" : "border-slate-700"}`}>
+                <div key={r.url} className={`rounded border px-2 py-1.5 ${r.verdict === "quarantined" ? "border-red-500/40 bg-red-500/5" : "border-mc-line"}`}>
                   <div className="flex items-center justify-between gap-2">
                     <a href={r.url} target="_blank" rel="noreferrer" className="text-[11px] text-cyan-300 hover:underline truncate">{r.domain}</a>
                     <span className={`text-[10px] font-semibold ${r.verdict === "quarantined" ? "text-red-300" : "text-emerald-300"}`}>{r.verdict}</span>
@@ -140,7 +140,7 @@ export function SiteIntelPanel() {
                   {r.verdict === "quarantined" ? (
                     <div className="text-[10px] text-red-200/90">{r.flags.map((f) => FLAG_TEXT[f.flag] ?? f.flag).join(" · ")}</div>
                   ) : (
-                    <div className="text-[10px] text-slate-400 line-clamp-2">{r.excerpt}</div>
+                    <div className="text-[10px] text-mc-mute line-clamp-2">{r.excerpt}</div>
                   )}
                 </div>
               ))}
@@ -150,10 +150,10 @@ export function SiteIntelPanel() {
       ))}
 
       {/* noticeboard injection demo */}
-      <div className="mt-3 border-t border-slate-700 pt-3">
-        <div className="text-xs font-semibold text-slate-200 mb-1.5">Noticeboard bulletin</div>
-        <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} className="w-full text-[11px] bg-slate-900/70 border border-slate-700 rounded-md p-2 text-slate-200 focus:outline-none focus:border-cyan-500" />
-        <button onClick={post} disabled={posting || !draft.trim()} className="mt-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100 disabled:opacity-40">
+      <div className="mt-3 border-t border-mc-line pt-3">
+        <div className="text-xs font-semibold text-mc-ink mb-1.5">Noticeboard bulletin</div>
+        <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} className="w-full text-[11px] bg-mc-bg/70 border border-mc-line rounded-md p-2 text-mc-ink focus:outline-none focus:border-cyan-500" />
+        <button onClick={post} disabled={posting || !draft.trim()} className="mt-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-mc-raise hover:bg-mc-line2 text-mc-ink disabled:opacity-40">
           {posting ? "Screening…" : "Post bulletin"}
         </button>
         {bulletins[0] && (
@@ -170,7 +170,7 @@ export function SiteIntelPanel() {
                 ))}
               </ul>
             )}
-            <div className="text-[11px] text-slate-300 mt-1">{bulletins[0].effect}</div>
+            <div className="text-[11px] text-mc-ink/85 mt-1">{bulletins[0].effect}</div>
           </div>
         )}
       </div>

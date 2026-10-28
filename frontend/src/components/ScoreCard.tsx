@@ -117,9 +117,9 @@ export function ScoreCard({ runId }: { runId: string }) {
     return () => { cancelled = true; };
   }, [runId]);
 
-  if (loading) return <div className="text-xs text-slate-500 text-center py-4">Loading scorecard…</div>;
+  if (loading) return <div className="text-xs text-mc-dim text-center py-4">Loading scorecard…</div>;
   if (error) return <div className="text-xs text-red-400 text-center py-2">{error}</div>;
-  if (!scores || scores.error) return <div className="text-xs text-slate-500 text-center py-2">No score data</div>;
+  if (!scores || scores.error) return <div className="text-xs text-mc-dim text-center py-2">No score data</div>;
 
   const s = scores.scores || {};
   const composite = s.composite ?? 0;
@@ -129,7 +129,7 @@ export function ScoreCard({ runId }: { runId: string }) {
       {/* Composite score */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-slate-500">Composite Score</div>
+          <div className="text-[10px] uppercase tracking-wider text-mc-dim">Composite Score</div>
           <div className={`text-2xl font-bold ${composite > 0.7 ? "text-green-400" : composite > 0.4 ? "text-yellow-400" : "text-red-400"}`}>
             {(composite * 100).toFixed(0)}%
           </div>
@@ -154,14 +154,14 @@ export function ScoreCard({ runId }: { runId: string }) {
           const val = s[dim] ?? 0;
           return (
             <div key={dim} className="flex items-center gap-2">
-              <div className="w-16 text-[10px] text-slate-400 truncate">{DIM_LABELS[dim]}</div>
-              <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+              <div className="w-16 text-[10px] text-mc-mute truncate">{DIM_LABELS[dim]}</div>
+              <div className="flex-1 h-1.5 bg-mc-raise rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-500" style={{
                   width: `${val * 100}%`,
                   backgroundColor: DIM_COLORS[dim],
                 }} />
               </div>
-              <div className="w-8 text-[10px] text-slate-300 font-mono text-right">{(val * 100).toFixed(0)}</div>
+              <div className="w-8 text-[10px] text-mc-ink/85 font-mono text-right">{(val * 100).toFixed(0)}</div>
             </div>
           );
         })}
@@ -175,7 +175,7 @@ export function ScoreCard({ runId }: { runId: string }) {
             <div key={i} className={`text-[10px] px-2 py-1 rounded border ${
               f.severity === "high" ? "bg-red-500/10 border-red-500/20 text-red-300" :
               f.severity === "medium" ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-300" :
-              "bg-slate-700/50 border-slate-600 text-slate-400"
+              "bg-mc-raise/50 border-mc-line2 text-mc-mute"
             }`}>
               <span className="font-semibold">{f.type}</span>: {f.description}
             </div>

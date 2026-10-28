@@ -47,8 +47,8 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
     setLessonLoading(false);
   }
 
-  if (loading) return <div className="text-xs text-slate-500 text-center py-3">Loading introspection…</div>;
-  if (!data) return <div className="text-xs text-slate-500 text-center py-2">No introspection data</div>;
+  if (loading) return <div className="text-xs text-mc-dim text-center py-3">Loading introspection…</div>;
+  if (!data) return <div className="text-xs text-mc-dim text-center py-2">No introspection data</div>;
 
   return (
     <div className="space-y-3">
@@ -63,7 +63,7 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
           {data.denial_count} denials
         </span>
         <span className={`text-[10px] px-2 py-1 rounded-full border ${
-          data.total_replans > 0 ? "bg-amber-500/15 text-amber-300 border-amber-500/30" : "bg-slate-700 text-slate-400 border-slate-600"
+          data.total_replans > 0 ? "bg-amber-500/15 text-amber-300 border-amber-500/30" : "bg-mc-raise text-mc-mute border-mc-line2"
         }`}>
           {data.total_replans} replans
         </span>
@@ -77,7 +77,7 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
         {(["denials", "replans", "memory"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`text-[10px] font-medium px-2.5 py-1 rounded-lg transition ${
-              tab === t ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-slate-500 hover:text-slate-400"
+              tab === t ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-mc-dim hover:text-mc-mute"
             }`}>
             {t === "denials" ? "Denial History" : t === "replans" ? "Replans" : "Agent Memory"}
           </button>
@@ -87,16 +87,16 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
       {tab === "denials" && (
         <div className="max-h-48 overflow-y-auto space-y-1">
           {data.denial_history?.length === 0 ? (
-            <div className="text-xs text-slate-500 text-center py-2">No denials recorded</div>
+            <div className="text-xs text-mc-dim text-center py-2">No denials recorded</div>
           ) : (
             data.denial_history?.map((d: any, i: number) => (
               <div key={i} className="flex items-start gap-2 text-[10px] bg-red-500/5 border border-red-500/10 rounded px-2 py-1.5">
                 <span className="text-red-400 font-bold shrink-0">{d.decision}</span>
                 <div className="flex-1">
-                  <span className="text-slate-400 font-mono">{d.policy_hits?.join(", ")}</span>
-                  {d.reasons?.[0] && <div className="text-slate-500 mt-0.5 truncate">{d.reasons[0]}</div>}
+                  <span className="text-mc-mute font-mono">{d.policy_hits?.join(", ")}</span>
+                  {d.reasons?.[0] && <div className="text-mc-dim mt-0.5 truncate">{d.reasons[0]}</div>}
                 </div>
-                <span className="text-slate-600 font-mono shrink-0">{d.risk_score?.toFixed(2)}</span>
+                <span className="text-mc-dim font-mono shrink-0">{d.risk_score?.toFixed(2)}</span>
               </div>
             ))
           )}
@@ -106,16 +106,16 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
       {tab === "replans" && (
         <div className="max-h-48 overflow-y-auto space-y-1">
           {data.replans?.length === 0 ? (
-            <div className="text-xs text-slate-500 text-center py-2">No replans triggered</div>
+            <div className="text-xs text-mc-dim text-center py-2">No replans triggered</div>
           ) : (
             data.replans?.map((r: any, i: number) => (
               <div key={i} className="text-[10px] bg-amber-500/5 border border-amber-500/10 rounded px-2 py-1.5">
                 <div className="flex items-center gap-2">
                   <span className="text-amber-400 font-bold">REPLAN</span>
-                  <span className="text-slate-500">{r.payload?.reason}</span>
+                  <span className="text-mc-dim">{r.payload?.reason}</span>
                 </div>
                 {r.payload?.blocked_waypoint && (
-                  <div className="text-slate-500 mt-0.5">
+                  <div className="text-mc-dim mt-0.5">
                     Blocked at ({r.payload.blocked_waypoint.x}, {r.payload.blocked_waypoint.y})
                     → {r.payload.new_plan_waypoints || "?"} new waypoints
                   </div>
@@ -132,10 +132,10 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
           {memoryStats && (
             <div className="flex flex-wrap gap-2 text-[10px]">
               {memoryStats.total_entries != null && (
-                <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-300">{memoryStats.total_entries} entries</span>
+                <span className="px-2 py-0.5 rounded bg-mc-raise text-mc-ink/85">{memoryStats.total_entries} entries</span>
               )}
               {memoryStats.categories && Object.entries(memoryStats.categories).map(([cat, count]) => (
-                <span key={cat} className="px-2 py-0.5 rounded bg-slate-700/50 text-slate-400">{cat}: {String(count)}</span>
+                <span key={cat} className="px-2 py-0.5 rounded bg-mc-raise/50 text-mc-mute">{cat}: {String(count)}</span>
               ))}
             </div>
           )}
@@ -154,7 +154,7 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
                 }
               }}
               placeholder="Search agent memory..."
-              className="flex-1 bg-slate-900/60 border border-slate-600 rounded px-2 py-1 text-[10px] text-white focus:outline-none focus:border-cyan-500 placeholder:text-slate-500"
+              className="flex-1 bg-mc-bg/60 border border-mc-line2 rounded px-2 py-1 text-[10px] text-white focus:outline-none focus:border-cyan-500 placeholder:text-mc-dim"
             />
             <button
               onClick={async () => {
@@ -172,13 +172,13 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
 
           {searchResults !== null && (
             <div className="space-y-1">
-              <div className="text-[10px] text-slate-500">{searchResults.length} result{searchResults.length !== 1 ? "s" : ""}</div>
+              <div className="text-[10px] text-mc-dim">{searchResults.length} result{searchResults.length !== 1 ? "s" : ""}</div>
               {searchResults.map((r: any, i: number) => (
                 <div key={i} className="text-[10px] bg-cyan-500/10 border border-cyan-500/20 rounded px-2 py-1">
                   <span className="text-cyan-400 font-semibold">{r.category || "memory"}</span>
-                  <span className="text-slate-400 mx-1">•</span>
-                  <span className="text-slate-300">{r.content?.lesson || r.content || JSON.stringify(r).slice(0, 80)}</span>
-                  {r.similarity != null && <span className="text-[9px] text-slate-500 ml-1">({(r.similarity * 100).toFixed(0)}%)</span>}
+                  <span className="text-mc-mute mx-1">•</span>
+                  <span className="text-mc-ink/85">{r.content?.lesson || r.content || JSON.stringify(r).slice(0, 80)}</span>
+                  {r.similarity != null && <span className="text-[9px] text-mc-dim ml-1">({(r.similarity * 100).toFixed(0)}%)</span>}
                 </div>
               ))}
             </div>
@@ -201,13 +201,13 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
 
           <div className="max-h-40 overflow-y-auto space-y-1">
             {memory.length === 0 ? (
-              <div className="text-xs text-slate-500 text-center py-2">No learned memories yet</div>
+              <div className="text-xs text-mc-dim text-center py-2">No learned memories yet</div>
             ) : (
               memory.map((m: any, i: number) => (
-                <div key={i} className="text-[10px] bg-slate-700/50 border border-slate-600 rounded px-2 py-1">
+                <div key={i} className="text-[10px] bg-mc-raise/50 border border-mc-line2 rounded px-2 py-1">
                   <span className="text-cyan-400 font-semibold">{m.category}</span>
-                  <span className="text-slate-400 mx-1">•</span>
-                  <span className="text-slate-300">{m.content?.lesson || JSON.stringify(m.content).slice(0, 80)}</span>
+                  <span className="text-mc-mute mx-1">•</span>
+                  <span className="text-mc-ink/85">{m.content?.lesson || JSON.stringify(m.content).slice(0, 80)}</span>
                 </div>
               ))
             )}
@@ -216,8 +216,8 @@ export function IntrospectionPanel({ runId }: { runId: string }) {
           {/* Memory context for LLM */}
           {data.memory_context && data.memory_context !== "No persistent memory entries." && (
             <details className="text-[10px]">
-              <summary className="text-slate-500 cursor-pointer hover:text-slate-400">LLM Memory Context</summary>
-              <pre className="text-slate-400 bg-slate-900/60 p-2 rounded mt-1 overflow-x-auto max-h-32 overflow-y-auto font-mono whitespace-pre-wrap">
+              <summary className="text-mc-dim cursor-pointer hover:text-mc-mute">LLM Memory Context</summary>
+              <pre className="text-mc-mute bg-mc-bg/60 p-2 rounded mt-1 overflow-x-auto max-h-32 overflow-y-auto font-mono whitespace-pre-wrap">
                 {data.memory_context}
               </pre>
             </details>

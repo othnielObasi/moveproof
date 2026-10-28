@@ -53,7 +53,7 @@ export default function AlertsPanel({ alerts, onDismiss }: AlertsPanelProps) {
 
   if (alerts.length === 0) {
     return (
-      <div className="text-center text-slate-500 py-4">
+      <div className="text-center text-mc-dim py-4">
         <span className="text-2xl">✓</span>
         <p className="text-sm mt-1">No active alerts</p>
       </div>
@@ -76,13 +76,13 @@ export default function AlertsPanel({ alerts, onDismiss }: AlertsPanelProps) {
                   <span className={`text-xs font-semibold uppercase ${styles.text}`}>
                     {alert.severity}
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-mc-dim">
                     {formatTime(alert.timestamp)}
                   </span>
                 </div>
-                <p className="text-sm text-slate-200 mt-1">{alert.message}</p>
+                <p className="text-sm text-mc-ink mt-1">{alert.message}</p>
                 {alert.policyId && (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-mc-dim mt-1">
                     Policy: {alert.policyId}
                   </p>
                 )}
@@ -90,7 +90,7 @@ export default function AlertsPanel({ alerts, onDismiss }: AlertsPanelProps) {
               {onDismiss && (
                 <button
                   onClick={() => onDismiss(alert.id)}
-                  className="text-slate-500 hover:text-slate-300 text-lg"
+                  className="text-mc-dim hover:text-mc-ink/85 text-lg"
                 >
                   ×
                 </button>

@@ -4,8 +4,19 @@
 
 /* Custom styles */
 body {
-  @apply bg-slate-900 text-white;
+  @apply bg-mc-bg text-mc-ink antialiased;
 }
+
+/* Mission-control surfaces */
+.mc-grid-bg {
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.mc-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.mc-scroll::-webkit-scrollbar-thumb { background: #253246; border-radius: 3px; }
+.tabular { font-variant-numeric: tabular-nums; }
 
 /* Smooth animations — scoped to interactive elements only */
 a, button, input, select, textarea {
