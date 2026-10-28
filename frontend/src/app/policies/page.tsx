@@ -6,6 +6,7 @@ import {
   listPolicies, testPolicy,
 } from "@/lib/api";
 import { Button, Empty, KV, Mono, Notice, Page, PageHeader, Panel, Pill, Tabs, Verdict, cx } from "@/components/ui";
+import { DriftDemo } from "@/components/DriftDemo";
 
 type Policy = { policy_id: string; name: string; description: string; severity: string; parameters?: Record<string, any>; trigger?: string; action?: string };
 type TabId = "policies" | "rules" | "learning" | "sandbox";
@@ -28,12 +29,12 @@ export default function GovernancePage() {
         { id: "policies", label: "Policies" },
         { id: "rules", label: "Rules in force" },
         { id: "learning", label: "Learning & task focus" },
-        { id: "sandbox", label: "Test a move" },
+        { id: "sandbox", label: "Test a move or plan" },
       ]} />
       {tab === "policies" && <Policies />}
       {tab === "rules" && <Rules />}
       {tab === "learning" && <Learning />}
-      {tab === "sandbox" && <Sandbox />}
+      {tab === "sandbox" && <div className="space-y-4"><Sandbox /><DriftDemo /></div>}
     </Page>
   );
 }

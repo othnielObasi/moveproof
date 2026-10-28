@@ -525,3 +525,8 @@ export const getDecisionStats = (runId: string) => getJson(`/governance/decision
 export const getLlmUsage = () => getJson("/llm/usage", "model usage");
 export const getLlmModels = () => getJson("/llm/models", "model tiers");
 export const getLearningSummary = () => getJson("/evidence/learning", "learning summary");
+export async function checkPlanForDrift(body: { start: { x: number; y: number }; goal: { x: number; y: number }; waypoints: Array<{ x: number; y: number }> }) {
+  const r = await fetch(`${API_BASE}/plans/check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await parseErrorResponse(r, "Plan check failed"));
+  return r.json();
+}

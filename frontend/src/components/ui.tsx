@@ -85,7 +85,7 @@ export function Pill({ tone = "neutral", children, dot = false, className }: {
 export function verdictTone(v?: string | null): Tone {
   const s = String(v || "").toUpperCase();
   if (["APPROVED", "SAFE", "COMPLETED", "OK", "AGREE", "PASS", "PASSED", "VALID"].includes(s)) return "ok";
-  if (["SLOW", "NEEDS_REVIEW", "REPLAN", "PAUSED", "HOLDING", "UNCONFIRMED_SIGHTING", "PLANNING", "WARN"].includes(s)) return "warn";
+  if (["SLOW", "NEEDS_REVIEW", "REPLAN", "PAUSED", "HOLDING", "UNCONFIRMED_SIGHTING", "PLANNING", "WARN", "DRIFT"].includes(s)) return "warn";
   if (["DENIED", "STOP", "FAILED", "MISSED_HAZARD", "BLOCKED", "INVALID", "FAILED_SAFETY"].includes(s)) return "stop";
   if (["RUNNING", "EXECUTING"].includes(s)) return "accent";
   return "neutral";

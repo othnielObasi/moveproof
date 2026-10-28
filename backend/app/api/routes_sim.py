@@ -36,6 +36,29 @@ async def get_telemetry():
     return perception.apply(site_intel.observe(telemetry))
 
 
+class PlanCheckIn(BaseModel):
+    start: Dict[str, float]
+    goal: Dict[str, float]
+    waypoints: list = Field(default_factory=list)
+
+
+@router.post("/plans/check")
+async def check_plan_for_drift(body: PlanCheckIn):
+    """Run the task-drift guard on any plan, with no side effects (nothing moves, nothing is recorded).
+    Shows what the guard would decide, and the aisle route it would use instead."""
+    from app.services.task_guard import guard
+    from app.world_model import ZONE_SPEED_LIMITS
+    try:
+        world = await sim.get_world()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"sim error: {e}")
+    wps = [{"x": float(w["x"]), "y": float(w["y"]), "max_speed": float(w.get("max_speed", 0.5))}
+           for w in body.waypoints if isinstance(w, dict) and "x" in w and "y" in w][:100]
+    g = guard({"waypoints": wps, "model_used": "submitted plan"}, body.start, body.goal, world, ZONE_SPEED_LIMITS)
+    return {"check": g["check"], "replaced": g["replaced"], "submitted": wps,
+            "used": g["plan"]["waypoints"], "used_by": g["plan"].get("model_used")}
+
+
 @router.get("/perception/status")
 def perception_status():
     """Vision model, settings, active caution zones and the latest checks."""

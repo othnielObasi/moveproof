@@ -210,6 +210,28 @@ MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.
 
 ---
 
+## Feedback on Nebius and NVIDIA tools
+
+What we found while building MoveProof on Nebius Token Factory, Nebius AI Cloud and NVIDIA Nemotron.
+
+**Nebius Token Factory**
+- The OpenAI-compatible API made it quick to put Nemotron behind our existing planner interface, and the catalogue had the whole family we needed, including a vision model.
+- Reasoning tokens count against `max_tokens` with no warning other than `finish_reason: length`. Typical reasoning budgets per model, or a separate reasoning-budget parameter, would prevent silently truncated answers.
+- For Nemotron 3.5 Super VL, only `chat_template_kwargs: {"enable_thinking": false}` turned thinking off; a `/no_think` system message and `reasoning_effort` did not. Documenting this on the model page would save time.
+
+**Nebius AI Cloud and Serverless Jobs**
+- Per-second billing and the dry-run were excellent: the dry-run caught a quota problem before anything was billed, and a 4½-minute pilot cost under a cent.
+- When a platform isn't available in a project's region, the error is "Platform cpu-e2 was not found in project". Saying it isn't offered in this region, and listing the platforms that are, would make it obvious.
+- `nebius ai job logs --tail` accepts at most 1,000 lines; larger values fail. A documented way to return job artifacts (or a simple output-bucket example) would help.
+- The CLI's quota listing showed usage but not limits.
+- The Ubuntu 24.04 image reports a newer release codename, which made Docker's official apt repository pick packages the image can't install; we pinned the noble repository.
+
+**NVIDIA Nemotron**
+- Nemotron 3 Ultra's replanning around blocked waypoints was the strongest part of the planner: all 365 benchmark calls produced usable plans once the token budget was right.
+- Nemotron 3.5 Lightning is fast but also reasons, and hit a 2,048-token cap on planning prompts; the fast tier needs a larger budget than expected.
+
+---
+
 ## Quick Start
 
 ### Docker Compose (recommended)
@@ -683,6 +705,9 @@ The browser smoke tests use fixtures for every API and WebSocket call and fail o
 | [backend/bench/README.md](backend/bench/README.md) | Safety benchmark method and commands |
 | [docs/demo-script.md](docs/demo-script.md) | 4-minute demo script |
 | [docs/demo-build-walkthrough.md](docs/demo-build-walkthrough.md) | Narration script for recording the build |
+| [docs/video-script.md](docs/video-script.md) | Shot-by-shot script for the 3-minute demo video |
+| [docs/devpost-draft.md](docs/devpost-draft.md) | Hackathon submission text |
+| [deploy/nebius/README.md](deploy/nebius/README.md) | Benchmark on Nebius Serverless Jobs |
 | [docs/whitepaper.md](docs/whitepaper.md) | Technical whitepaper — architecture, policy engine, chain-of-trust, compliance |
 | [docs/pitch.md](docs/pitch.md) | Product pitch summary |
 | [docs/one-pager.md](docs/one-pager.md) | One-page product overview for stakeholders |
