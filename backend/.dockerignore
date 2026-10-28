@@ -10,4 +10,7 @@ __pycache__
 moveproof_backend.egg-info
 data/
 tests/
-bench/results/
+# Benchmark outputs: only the summaries the Evidence page serves
+bench/results/*/*
+!bench/results/*/results.json
+!bench/results/*/manifest.json
