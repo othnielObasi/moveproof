@@ -130,7 +130,15 @@ class Nemotron(Planner):
         plan = asyncio.run(self.llm.generate_plan(tel, instruction, goal, lessons=lessons))
         wps = [{"x": float(w["x"]), "y": float(w["y"]), "max_speed": float(w.get("max_speed", 0.5))}
                for w in plan.get("waypoints", [])]
-        return wps, {"lessons_applied": plan.get("lessons_applied", []), "model_used": plan.get("model_used")}
+        # Same step as live runs (routes_runs / run_service): keep the model's
+        # waypoints but re-route any leg that would cut through solid racking.
+        repaired = 0
+        if wps:
+            from app.services.site_router import repair_plan
+            from app.world_model import ZONE_SPEED_LIMITS
+            wps, repaired = repair_plan(self.layout.data, tel, wps, ZONE_SPEED_LIMITS)
+        return wps, {"lessons_applied": plan.get("lessons_applied", []), "model_used": plan.get("model_used"),
+                     "repaired_legs": repaired}
 
     def plan(self, tel, sc, lessons, known):
         instruction = (f"Drive the robot from bay {sc.start_bay} to bay {sc.goal_bay}. Racks are solid: "

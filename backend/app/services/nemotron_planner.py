@@ -18,6 +18,7 @@ deterministic policy engine decides.
 """
 from __future__ import annotations
 
+import asyncio
 import contextvars
 import logging
 import re
@@ -119,14 +120,30 @@ def reasoning_tier() -> Iterator[None]:
 # ---------------------------------------------------------------------------
 
 _client: Optional[httpx.AsyncClient] = None
+_own_client: Optional[httpx.AsyncClient] = None       # the client this module created
+_own_client_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
 def _get_client() -> httpx.AsyncClient:
-    global _client
-    if _client is None or _client.is_closed:
+    """Shared client. An AsyncClient is bound to the event loop it first ran on;
+    callers that use asyncio.run() per call (the benchmark, scripts) get a fresh
+    loop each time, and reusing a client whose loop has closed fails with
+    "Event loop is closed". So a client this module created is replaced once its
+    loop is closed. A client set from outside (tests) is left alone."""
+    global _client, _own_client, _own_client_loop
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    stale = (_client is not None and _client is _own_client and _own_client_loop is not None
+             and _own_client_loop is not loop and _own_client_loop.is_closed())
+    if _client is None or _client.is_closed or stale:
         _client = httpx.AsyncClient(
             limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
         )
+        _own_client, _own_client_loop = _client, loop
+    elif _client is _own_client and _own_client_loop is None:
+        _own_client_loop = loop
     return _client
 
 
