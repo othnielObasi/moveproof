@@ -1,0 +1,16 @@
+{
+  "repository": "othnielObasi/moveproof",
+  "source_commit": "d859b7589bb167b6967e3db396baa0c4206452cb",
+  "source_archive_sha256": "d64702cd83319ec093d2abe91af799d353f67fad4210683b1e2d939146baa6e3",
+  "planner": "nemotron",
+  "rounds": 2,
+  "seeds_per_round": 10,
+  "arms": [
+    "ungoverned",
+    "governed",
+    "learning"
+  ],
+  "execution": "nebius-serverless-job",
+  "python": "3.12.16 (main, Oct 26 2026, 22:51:49) [GCC 14.2.0]",
+  "scope": "benchmark"
+}

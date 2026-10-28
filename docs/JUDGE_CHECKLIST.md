@@ -3,6 +3,7 @@
 Each item can be checked in the running app or with one API call. Replace `{run_id}` with a run from `GET /runs`.
 
 - [ ] **Deployment**
+  - Live demo on Nebius AI Cloud: https://moveproof.213-239-186-67.sslip.io (one shared robot; one mission at a time; settings read-only).
   - Frontend, backend and simulator reachable; API docs at `/docs`; `GET /health` reports database and simulator.
 
 - [ ] **NVIDIA Nemotron on Nebius Token Factory**
@@ -32,6 +33,7 @@ Each item can be checked in the running app or with one API call. Replace `{run_
   - Results in [`backend/bench/results/rule_based`](../backend/bench/results/rule_based/README.md): 150 seeded missions per arm; unsafe moves executed 1,262 with no gate, 0 with the gate, 0 with gate + learning.
   - Reproduce: `cd backend && python -m bench run --planner rule_based --rounds 5 --seeds-per-round 30`.
   - Replay any benchmark case in the live simulator: `POST /sim/seed {"seed": N, "mode": "benchmark"}`.
+  - With **Nemotron 3 Ultra** planning, run on **Nebius Serverless Jobs**: 824 unsafe moves proposed under the gate, 0 executed; 400 executed without it ([`backend/bench/results/nemotron`](../backend/bench/results/nemotron/README.md), runner in [`deploy/nebius`](../deploy/nebius/README.md)).
 
 - [ ] **Learning loop**
   - `GET /agent/lessons` lists lessons distilled from gate decisions only.
@@ -68,5 +70,5 @@ Each item can be checked in the running app or with one API call. Replace `{run_
 - [ ] **Known limitations**
   - The live run loop checks about once a second; the benchmark engine at 5 Hz. People can still reach a robot that is already braking (counted separately in the benchmark).
   - Pause flags and the in-memory circuit-breaker cache reset on a backend restart.
-  - The benchmark at scale on Nebius Serverless Jobs is not done yet.
+  - With Nemotron planning, 40–50% of benchmark missions run out of time because the gate blocks about a third of its moves; safety is unaffected.
   - Vision reads a rendered top-down camera, not a real camera feed.

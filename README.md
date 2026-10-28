@@ -95,7 +95,22 @@ Model IDs are configurable (`NEMOTRON_FAST_MODELS`, `NEMOTRON_REASONING_MODEL`) 
 - With the gate, no unsafe move executed and the robot never moved into a person. People still reached a robot that was already braking (38 times without learning, 9 with), which a 5 Hz check cannot prevent.
 - Learning cut unsafe proposals by 25–63% per round after the first and wrongly blocked moves from about 16% to 2%, on fresh scenarios each round, with the same completion rate. The cost: missions about 23% slower than the gate alone, mostly from yielding at busy crossings.
 - A 60-mission stress test with a planner that drives at 0.9 m/s everywhere: 527 unsafe moves executed without the gate, 0 with it ([results](backend/bench/results/reckless/README.md)).
-- Nemotron results need a Token Factory key: `python -m bench run --planner nemotron`.
+### With NVIDIA Nemotron planning, run on Nebius Serverless Jobs
+
+The same benchmark with **Nemotron 3 Ultra** planning and replanning, run as a **Nebius Serverless Job** from public commit `d859b75` (2 rounds × 10 fresh scenarios × 3 arms; 365 Ultra calls, all successful; 52 minutes). Full tables: [`backend/bench/results/nemotron`](backend/bench/results/nemotron/README.md); runner: [`deploy/nebius`](deploy/nebius/README.md).
+
+| | No gate | Gate | Gate + learning |
+|---|---|---|---|
+| Unsafe moves executed | 400 | **0** | **0** |
+| Robot hit a rack or obstacle | 8 | **0** | **0** |
+| Person contacts (all with the robot already braking under the gate) | 8 | 6 | 2 |
+| Unsafe proposals per 100 moves, round 2 | 14.67 | 2.69 | **1.69** |
+| Missions completed within the 150 s limit | 100% | 60% | 50% |
+| Safe moves wrongly blocked | – | 33.0% | 31.3% |
+
+- **The guarantee holds with a model planner:** Nemotron proposed 824 unsafe moves under the gate; none executed. Without the gate, 400 did, including 8 moves into a person and 8 into racking.
+- **Learning works on Nemotron too:** in round 2, with 74 lessons from round 1, the learning arm proposed 37% fewer unsafe moves than the gate alone (1.69 vs 2.69 per 100) and had 1 person contact against 5.
+- **The cost is honest:** Nemotron's plans are often faster or tighter than the rules allow, so the gate blocks about a third of its moves and 40–50% of missions run out of time. The rule-based planner, which knows the limits, completes 97–98%. Safety is unchanged; efficiency is where a model planner still needs work, and the blocked-move record is exactly what the learning loop and governed rule changes are built to use.
 
 ---
 
@@ -178,7 +193,8 @@ MoveProof builds on our earlier project [Sovereign Robotics Ops](https://github.
 - [x] Post-run validation fails a run only for an unsafe *execution*, not for the gate blocking unsafe proposals
 - [x] NVIDIA vision model perception (Nemotron 3.5 Super VL), cross-checked against simulator ground truth; unconfirmed sightings can only slow the robot
 - [x] Nemotron verified end to end on live missions; fixes for reasoning output being cut off, model JSON parsing, and an operator stop that could fail while a model call was in flight
-- [ ] Safety benchmark at scale on Nebius Serverless Jobs: unsafe moves proposed vs. unsafe moves executed
+- [x] Safety benchmark with Nemotron on Nebius Serverless Jobs: 824 unsafe moves proposed under the gate, 0 executed ([results](backend/bench/results/nemotron/README.md))
+- [x] Live demo on a Nebius AI Cloud VM with public-demo guardrails
 
 ---
 
