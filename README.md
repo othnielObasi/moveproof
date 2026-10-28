@@ -76,6 +76,16 @@ Model IDs are configurable (`NEMOTRON_FAST_MODELS`, `NEMOTRON_REASONING_MODEL`) 
 
 ---
 
+### Where Token Factory accelerated our workflow
+
+- **One API for the whole Nemotron family.** Token Factory's OpenAI-compatible endpoint let us put Nemotron behind our existing planner interface with one small module, then route by tier: Ultra for planning and replanning, Lightning and Super for fast calls, 3.5 Super VL for vision. No GPUs to provision or models to host.
+- **Vision in an afternoon.** Because the vision-language model sat in the same catalogue behind the same key, adding camera perception was a prompt and a parser, not an infrastructure project.
+- **Benchmarking at real scale.** The Nemotron benchmark made 365 Ultra calls in 52 minutes from a Nebius Serverless Job, all successful, with no rate-limit or capacity work on our side.
+- **Fast iteration on model behaviour.** Per-call usage (latency, tokens, truncation) let us find and fix two real problems in hours: Ultra's reasoning budget cutting off plans, and the vision model needing thinking switched off.
+- **A day-one check.** `scripts/check_token_factory.py` lists the NVIDIA models a key can see and smoke-tests each tier.
+
+---
+
 ## Safety benchmark results
 
 ![MoveProof safety benchmark](backend/bench/results/rule_based/chart.png)
@@ -171,6 +181,8 @@ During a run, Nemotron 3.5 Super VL on Token Factory reads the robot's camera fr
 Measured on the live simulator: answers in 0.3–2 s, positions within about 0.1–0.4 m, every person, spill and pallet found across repeated scenes once spills were drawn in a colour distinct from the robot. The run page's **Vision check** panel shows the latest result; `POST /perception/check` runs one on demand.
 
 ### Site intelligence with Tavily (untrusted input)
+
+**Why Tavily, and why this way:** a robot safety system has to know what a hazard *is* (a solvent spill is not a water spill), and the authoritative answer lives on the web. Tavily gives us search restricted to the publishers that matter (HSE, OSHA, NIOSH/CDC, ECHA, PubChem), fast enough to run while the robot is waiting. MoveProof then treats every result as untrusted, so the web can make the robot more careful but can never make it less safe.
 
 When a spill appears, MoveProof knows what was spilled from the warehouse system and asks **Tavily** for handling guidance, restricted to authoritative safety publishers (HSE, OSHA, NIOSH/CDC, ECHA, PubChem and similar). Outside text is never trusted:
 
