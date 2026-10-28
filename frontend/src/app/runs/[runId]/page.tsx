@@ -1385,7 +1385,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
                     <span className="text-slate-500 min-w-[65px]">Policies:</span>
                     <span className="text-slate-300 font-mono">{(lastDecision.governance?.policy_hits || []).length > 0
                       ? (lastDecision.governance.policy_hits).join(", ")
-                      : <span className="text-green-400">✓ 0 violations (10 active)</span>}</span>
+                      : <span className="text-green-400">✓ 0 violations (11 active)</span>}</span>
                   </div>
                 </div>
                 )}
