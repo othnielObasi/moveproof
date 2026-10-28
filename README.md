@@ -147,6 +147,18 @@ The gate's thresholds change only through this workflow ([`backend/app/policies/
 
 Every gate decision is signed with Ed25519 (what was proposed, what the gate saw, the rules version, the outcome). Verify one with `GET /governance/receipts/{run_id}/{id}/verify`; the public key is at `GET /governance/signing-key`. Set `RECEIPT_SIGNING_KEY` in production (see [`backend/app/utils/signing.py`](backend/app/utils/signing.py)); without it a development key is generated in `data/`.
 
+### Staying on task (task-drift guard)
+
+The gate judges each *move* for safety; the task guard judges each *plan* for focus ([`backend/app/services/task_guard.py`](backend/app/services/task_guard.py)). Every mission plan and every replan after a denial must:
+
+1. **end at the mission's destination** (within 1.5 m), taken from the mission record, never from the model;
+2. **stay inside the site**;
+3. **not wander**: at most 2× the route along the aisles plus 8 m, enough to detour round people or a spill, not enough to roam.
+
+A plan that fails is not used. The robot follows the aisle route to the same destination instead, and the rejected plan is kept in the record. Every check is a `TASK_CHECK` event in the hash chain. Beyond plans: the goal can't be changed by the planner, outside text reaches it only as fenced untrusted notes, a stalled robot is detected, and three denials in a row escalate to an operator.
+
+On the run page, the **Learning & task** tab shows each task check, the lessons Nemotron was given (and which it used), every replan with the policy that caused it, and the lessons the run produced.
+
 ### Vision: an NVIDIA model reads the robot camera, cross-checked
 
 During a run, Nemotron 3.5 Super VL on Token Factory reads the robot's camera frame every 5 seconds and reports people, the forklift, spills and pallets ([`backend/app/services/perception.py`](backend/app/services/perception.py)). MoveProof never takes its word for it:

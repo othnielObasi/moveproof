@@ -933,6 +933,17 @@ class RunService:
                                                 new_plan.update(waypoints=routed, hazard_rerouted=True)
                                 except Exception as route_err:
                                     logger.warning("Run %s: replan routing skipped: %s", run_id, route_err)
+                                # Task-drift guard: a replan must still end at the mission destination
+                                # (from the mission record, not the model) without wandering.
+                                task_check = None
+                                try:
+                                    from app.services.task_guard import guard
+                                    g = guard(new_plan, telemetry, goal, await self.sim.get_world(), ZONE_SPEED_LIMITS,
+                                              hazards=telemetry.get("site_constraints"))
+                                    new_plan, task_check = g["plan"], g["check"]
+                                    self._append_event(db, run_id, "TASK_CHECK", {"stage": "replan", **task_check})
+                                except Exception as tg_err:
+                                    logger.warning("Run %s: task guard skipped: %s", run_id, tg_err)
                                 new_wps = new_plan.get("waypoints", [])
                                 if new_wps:
                                     async with self._plans_lock:
@@ -953,6 +964,8 @@ class RunService:
                                                   else _settings.planner_provider,
                                         "note": "Replan after governance denial",
                                         "blocked_waypoint": blocked_wp,
+                                        "task_check": task_check,
+                                        "lessons_offered": [{"id": l["id"], "text": l["text"]} for l in lessons],
                                         "lessons_applied": applied,
                                     })
                                     logger.info("Run %s: replanned with %d new waypoints", run_id, len(new_wps))

@@ -11,6 +11,7 @@ import { wsUrlForRun } from "@/lib/ws";
 import type { WsMessage } from "@/lib/types";
 import Link from "next/link";
 import { Tabs } from "@/components/ui";
+import { RunLearningPanel } from "@/components/RunLearningPanel";
 
 /* ── Bay resolver (matches backend resolve_bay_from_instruction) ── */
 const BAY_PATTERN = /\b([ABSR])-?(\d{1,2})\b/i;
@@ -91,7 +92,7 @@ export default function RunPage({ params }: { params: { runId: string } }) {
   const [telemetry, setTelemetry] = useState<any>(null);
   const [world, setWorld] = useState<any>(null);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
-  const [sideTab, setSideTab] = useState<string>("intel");
+  const [sideTab, setSideTab] = useState<string>("learning");
   const [mapView, setMapView] = useState<"3d" | "2d">("3d");
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("view") === "2d") setMapView("2d");
@@ -1444,12 +1445,17 @@ export default function RunPage({ params }: { params: { runId: string } }) {
           {/* Secondary panels in tabs: the gate decision above stays visible */}
           <div>
             <Tabs value={sideTab} onChange={setSideTab} tabs={[
+              { id: "learning", label: "Learning & task" },
               { id: "intel", label: "Site & vision" },
               { id: "chain", label: "Chain & telemetry" },
               { id: "alerts", label: "Alerts", count: alerts.length },
               { id: "analysis", label: "Analysis" },
             ]} />
             <div className="pt-3 space-y-3">
+            {sideTab === "learning" && (
+              <RunLearningPanel runId={runId} events={events}
+                ended={["stopped", "completed", "failed", "failed_safety"].includes(String(currentStatus).toLowerCase())} />
+            )}
             {sideTab === "intel" && (<>
             {/* Tavily site intelligence (untrusted input) */}
             <SiteIntelPanel />

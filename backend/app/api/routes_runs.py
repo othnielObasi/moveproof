@@ -157,22 +157,39 @@ async def _plan_and_start_loop(svc: RunService, run_id: str, mission_id: str, mi
 
                 if plan and plan.get("waypoints"):
                     # Keep the model's waypoints but re-route any leg that would cut through racking
+                    from app.world_model import ZONE_SPEED_LIMITS as _ZL
+                    site_world = None
                     try:
                         from app.services.site_router import repair_plan
-                        from app.world_model import ZONE_SPEED_LIMITS as _ZL
-                        fixed, n_fixed = repair_plan(await svc.sim.get_world(), telemetry, plan["waypoints"], _ZL)
+                        site_world = await svc.sim.get_world()
+                        fixed, n_fixed = repair_plan(site_world, telemetry, plan["waypoints"], _ZL)
                         if n_fixed:
                             plan["waypoints"], plan["repaired_legs"] = fixed, n_fixed
                     except Exception as rep_err:
                         logger.warning("Plan repair skipped for run %s: %s", run_id, rep_err)
+                    plan_source = settings.planner_provider
+                    # Task-drift guard: the plan must still end at the mission destination
+                    # without wandering; otherwise the aisle route to the same goal is used.
+                    task_check = None
+                    if telemetry and site_world:
+                        try:
+                            from app.services.task_guard import guard
+                            g = guard(plan, telemetry, goal, site_world, _ZL, hazards=telemetry.get("site_constraints"))
+                            plan, task_check = g["plan"], g["check"]
+                            if g["replaced"]:
+                                plan_source = "fallback"
+                            svc._append_event(db, run_id, "TASK_CHECK", {"stage": "mission_plan", **task_check})
+                        except Exception as tg_err:
+                            logger.warning("Task guard skipped for run %s: %s", run_id, tg_err)
                     async with svc._plans_lock:
                         svc._plans[run_id] = plan["waypoints"]
-                    plan_source = settings.planner_provider
                     svc._append_event(db, run_id, "PLAN", {
                         "mission_id": mission_id,
                         "plan": plan,
                         "source": plan_source,
                         "note": "LLM multi-waypoint plan (upgraded from fallback)",
+                        "task_check": task_check,
+                        "lessons_offered": [{"id": l["id"], "text": l["text"]} for l in lessons],
                         "lessons_applied": [{"id": l["id"], "text": l["text"]} for l in lessons
                                             if l["id"] in plan.get("lessons_applied", [])],
                     })
