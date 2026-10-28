@@ -9,9 +9,48 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.deps import get_db
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
+
+
+@router.get("/learning")
+def learning_summary(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Live counts for adaptive learning and task-drift control on this deployment."""
+    from app.db.models import Event
+    from app.services.planner_lessons import all_lessons
+
+    counts = dict(db.query(Event.type, func.count(Event.id))
+                  .filter(Event.type.in_(("TASK_CHECK", "REPLAN", "PLAN"))).group_by(Event.type).all())
+    checks = drift = plans_with_lessons = lessons_used = 0
+    for (payload,) in db.query(Event.payload_json).filter(Event.type.in_(("TASK_CHECK", "PLAN"))).all():
+        try:
+            p = json.loads(payload)
+        except Exception:
+            continue
+        if "stage" in p and "verdict" in p:          # TASK_CHECK
+            checks += 1
+            drift += p.get("verdict") == "DRIFT"
+        elif p.get("lessons_offered"):               # PLAN with lessons
+            plans_with_lessons += 1
+            lessons_used += len(p.get("lessons_applied") or [])
+    lessons = all_lessons(db)
+    by_policy: Dict[str, int] = {}
+    for l in lessons:
+        by_policy[l["policy"]] = by_policy.get(l["policy"], 0) + 1
+    return {
+        "lessons": len(lessons),
+        "lessons_by_policy": dict(sorted(by_policy.items(), key=lambda kv: -kv[1])),
+        "plans_with_lessons": plans_with_lessons,
+        "lessons_used": lessons_used,
+        "replans": counts.get("REPLAN", 0),
+        "task_checks": checks,
+        "drift_caught": drift,
+    }
 
 RESULTS_DIR = Path(__file__).resolve().parents[2] / "bench" / "results"
 

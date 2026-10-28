@@ -226,6 +226,15 @@ curl -X POST http://localhost:8080/site-intel/screen \
 
 ---
 
+## Evidence
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/evidence/benchmarks` | Benchmark suites committed with the code (per-arm totals, rounds, model usage, Nebius job manifest) |
+| GET | `/evidence/learning` | Live counts: lessons learned, plans shaped by lessons, replans, task checks, drift caught |
+
+---
+
 ## Vision
 
 | Method | Endpoint | Description |

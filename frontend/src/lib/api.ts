@@ -524,3 +524,4 @@ export const verifyReceipt = (runId: string, id: string) => getJson(`/governance
 export const getDecisionStats = (runId: string) => getJson(`/governance/decisions/${runId}/stats`, "decision stats");
 export const getLlmUsage = () => getJson("/llm/usage", "model usage");
 export const getLlmModels = () => getJson("/llm/models", "model tiers");
+export const getLearningSummary = () => getJson("/evidence/learning", "learning summary");

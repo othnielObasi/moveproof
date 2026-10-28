@@ -35,9 +35,16 @@ Each item can be checked in the running app or with one API call. Replace `{run_
   - Replay any benchmark case in the live simulator: `POST /sim/seed {"seed": N, "mode": "benchmark"}`.
   - With **Nemotron 3 Ultra** planning, run on **Nebius Serverless Jobs**: 824 unsafe moves proposed under the gate, 0 executed; 400 executed without it ([`backend/bench/results/nemotron`](../backend/bench/results/nemotron/README.md), runner in [`deploy/nebius`](../deploy/nebius/README.md)).
 
-- [ ] **Learning loop**
-  - `GET /agent/lessons` lists lessons distilled from gate decisions only.
-  - `PLAN` events record which lesson IDs shaped each plan.
+- [ ] **Adaptive learning (the planner learns from the gate)**
+  - Overview → "It learns, and it stays on task": live counts of lessons learned and plans shaped by lessons.
+  - Any run → **Learning & task** tab: the lessons Nemotron was given (marked "used by Nemotron"), every replan with the policy that caused it, and the lessons the run produced.
+  - Governance → **Learning & task focus**: every lesson, with its policy, place and denial count. `GET /agent/lessons`.
+  - Lessons come only from the gate's own decision records and never change the rules. Benchmark round 2: 2.69 → 1.69 unsafe proposals per 100 moves with lessons.
+
+- [ ] **Task-drift control (every plan must still serve the mission)**
+  - Every mission plan and replan is checked before use: ends within 1.5 m of the mission destination (from the mission record, never the model), stays inside the site, at most 2× the aisle route + 8 m.
+  - A failing plan is replaced by the aisle route to the same destination; each check is a `TASK_CHECK` event in the hash chain.
+  - Visible on the run page (**Learning & task** → Task focus), the Overview (plans checked, drift caught) and `GET /evidence/learning`.
 
 - [ ] **Governed rule changes**
   - `GET /policies/active` shows rules in force, changeable thresholds with bounds, and fixed safety floors.

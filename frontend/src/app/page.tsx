@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { getBenchmarks, getLlmModels, getPerceptionStatus, listRuns } from "@/lib/api";
+import { getBenchmarks, getLearningSummary, getLlmModels, getPerceptionStatus, listRuns } from "@/lib/api";
 import { Button, Mono, Page, Panel, Pill, Stat, Verdict, cx } from "@/components/ui";
 
 type Suite = { id: string; title: string; execution: string; totals: Record<string, any>; model_usage?: any };
@@ -29,11 +29,13 @@ export default function OverviewPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [models, setModels] = useState<any>(null);
   const [vision, setVision] = useState<any>(null);
+  const [learning, setLearning] = useState<any>(null);
 
   useEffect(() => {
     getBenchmarks().then((d) => setSuites(d.suites || [])).catch(() => {});
     getLlmModels().then(setModels).catch(() => {});
     getPerceptionStatus().then(setVision).catch(() => {});
+    getLearningSummary().then(setLearning).catch(() => {});
     const loadRuns = () => listRuns().then((d: any) => setRuns(Array.isArray(d) ? d : d.runs || [])).catch(() => {});
     loadRuns();
     const id = setInterval(loadRuns, 10000);
@@ -41,6 +43,9 @@ export default function OverviewPage() {
   }, []);
 
   const nemo = suites.find((s) => s.id === "nemotron");
+  const lastRound: any = (nemo as any)?.rounds_detail?.[(nemo as any)?.rounds_detail?.length - 1];
+  const latestEnded = runs.filter((r) => ["stopped", "completed"].includes(r.status))
+    .sort((a, b) => (b.started_at || "").localeCompare(a.started_at || ""))[0];
   const rule = suites.find((s) => s.id === "rule_based");
   const ultra = nemo?.model_usage?.by_model?.find((m: any) => String(m.model).includes("Ultra"));
   const active = runs.find((r) => ["running", "planning", "paused"].includes(r.status));
@@ -110,6 +115,43 @@ export default function OverviewPage() {
           </div>
         </section>
 
+        {/* ── Learns from the gate, stays on task ───────────────────────── */}
+        <section className="mb-10">
+          <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-mc-dim mb-3">It learns, and it stays on task</h2>
+          <div className="grid lg:grid-cols-2 gap-4">
+            <Panel title="Adaptive learning" subtitle="The planner learns from the gate. The gate never drifts.">
+              <ol className="space-y-2 text-sm text-mc-mute mb-4">
+                <li><span className="text-mc-ink font-medium">Every denial is remembered</span> by place and policy: &ldquo;near (3, 3) in the aisle, people are often here: approach slowly.&rdquo;</li>
+                <li><span className="text-mc-ink font-medium">Before planning,</span> lessons near the route go to <span className="text-mc-nv">Nemotron Ultra</span> as advice; the plan records which it used.</li>
+                <li><span className="text-mc-ink font-medium">Only the gate&apos;s own records teach.</span> A model, a camera or a web page can&apos;t write a lesson, and lessons never change the rules.</li>
+              </ol>
+              <div className="grid grid-cols-3 gap-2">
+                <MiniStat label="Lessons learned" value={learning?.lessons} />
+                <MiniStat label="Plans shaped by lessons" value={learning?.plans_with_lessons} />
+                <MiniStat label="Unsafe proposals / 100 moves" tone="ok"
+                  value={lastRound ? <>{lastRound.arms?.governed?.unsafe_proposed_per_100_moves} → {lastRound.arms?.learning?.unsafe_proposed_per_100_moves}</> : undefined}
+                  hint="benchmark, round 2, with vs without lessons" />
+              </div>
+            </Panel>
+            <Panel title="Task-drift control" subtitle="Every plan and replan is checked before the robot uses it.">
+              <ol className="space-y-2 text-sm text-mc-mute mb-4">
+                <li><span className="text-mc-ink font-medium">Ends at the mission&apos;s destination,</span> taken from the mission record, never from the model.</li>
+                <li><span className="text-mc-ink font-medium">Stays inside the site and doesn&apos;t wander:</span> at most twice the aisle route, enough to detour round a person, not to roam.</li>
+                <li><span className="text-mc-ink font-medium">A plan that fails isn&apos;t used.</span> The robot takes the aisle route to the same destination, and the check is signed into the audit chain.</li>
+              </ol>
+              <div className="grid grid-cols-3 gap-2">
+                <MiniStat label="Plans checked" value={learning?.task_checks} />
+                <MiniStat label="Drift caught" value={learning?.drift_caught} tone={learning?.drift_caught ? "warn" : "ok"} />
+                <MiniStat label="Replans after a denial" value={learning?.replans} />
+              </div>
+            </Panel>
+          </div>
+          <div className="mt-3 text-xs text-mc-dim">
+            Watch it happen: open any run and the <span className="text-mc-ink">Learning &amp; task</span> tab shows the lessons Nemotron was given, every replan and every task check
+            {latestEnded && <> (<Link href={`/runs/${latestEnded.id}`} className="text-mc-accent hover:underline">latest run</Link>)</>}. All lessons: <Link href="/policies" className="text-mc-accent hover:underline">Governance</Link>.
+          </div>
+        </section>
+
         <section className="grid lg:grid-cols-3 gap-4 mb-10">
           {/* ── Untrusted by default ─────────────────────────────────── */}
           <Panel title="Untrusted by default" subtitle="Every outside input can add caution. None can remove it." className="lg:col-span-2">
@@ -163,6 +205,16 @@ export default function OverviewPage() {
 
 function short(m?: string) {
   return String(m || "—").replace(/^nvidia\//, "").replace(/_/g, ".");
+}
+
+function MiniStat({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint?: string; tone?: "ok" | "warn" }) {
+  return (
+    <div className="rounded-lg border border-mc-line bg-mc-raise/60 px-3 py-2.5">
+      <div className={cx("text-xl font-semibold tabular", tone === "ok" ? "text-mc-ok" : tone === "warn" ? "text-mc-warn" : "text-mc-ink")}>{value ?? "—"}</div>
+      <div className="text-[11px] text-mc-dim leading-tight mt-0.5">{label}</div>
+      {hint && <div className="text-[10px] text-mc-dim/80 leading-tight mt-0.5">{hint}</div>}
+    </div>
+  );
 }
 
 function Row({ k, v }: { k: React.ReactNode; v: React.ReactNode }) {

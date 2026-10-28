@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  getActivePolicies, getLessons, getPolicyActivations, getPolicyProposals, getTuningRecommendations,
+  getActivePolicies, getLearningSummary, getLessons, getPolicyActivations, getPolicyProposals, getTuningRecommendations,
   listPolicies, testPolicy,
 } from "@/lib/api";
 import { Button, Empty, KV, Mono, Notice, Page, PageHeader, Panel, Pill, Tabs, Verdict, cx } from "@/components/ui";
@@ -27,7 +27,7 @@ export default function GovernancePage() {
       <Tabs className="mb-5" value={tab} onChange={setTab} tabs={[
         { id: "policies", label: "Policies" },
         { id: "rules", label: "Rules in force" },
-        { id: "learning", label: "What the planner learned" },
+        { id: "learning", label: "Learning & task focus" },
         { id: "sandbox", label: "Test a move" },
       ]} />
       {tab === "policies" && <Policies />}
@@ -206,6 +206,7 @@ function Learning() {
             <li><span className="text-mc-ink font-semibold">Audit.</span> Each plan records the lessons that shaped it in the hash chain.</li>
           </ol>
         </Panel>
+        <TaskDriftCard />
         <Panel title="Tuning advice" subtitle="Recommend-only; a change still needs the governed workflow">
           {!tuning ? <div className="text-xs text-mc-dim">Loading…</div> : (tuning.recommendations || []).length === 0 ? (
             <div className="text-xs text-mc-dim">No recommendations yet.</div>
@@ -223,6 +224,28 @@ function Learning() {
         </Panel>
       </div>
     </div>
+  );
+}
+
+function TaskDriftCard() {
+  const [s, setS] = useState<any>(null);
+  useEffect(() => { getLearningSummary().then(setS).catch(() => {}); }, []);
+  return (
+    <Panel title="Task-drift control" subtitle="Every plan and replan is checked before use">
+      <ul className="space-y-1.5 text-xs text-mc-mute">
+        <li>Ends at the mission destination (from the mission record, never the model)</li>
+        <li>Stays inside the site; at most 2× the aisle route + 8 m</li>
+        <li>A failing plan is replaced by the aisle route to the same destination</li>
+      </ul>
+      {s && (
+        <div className="mt-3 pt-3 border-t border-mc-line/70">
+          <KV k="Plans checked" v={s.task_checks} />
+          <KV k="Drift caught" v={<span className={s.drift_caught ? "text-mc-warn" : "text-mc-ok"}>{s.drift_caught}</span>} />
+          <KV k="Replans after a denial" v={s.replans} />
+          <KV k="Plans shaped by lessons" v={s.plans_with_lessons} />
+        </div>
+      )}
+    </Panel>
   );
 }
 
