@@ -21,7 +21,7 @@ The original mock simulator (`sim/mock_sim`) is kept for comparison under the Do
 | Docker Compose | `docker compose up -d` (service `warehouse-sim`) |
 | Docker only | `docker build -f sim/warehouse_sim/Dockerfile -t moveproof-warehouse-sim .` then `docker run -p 8090:8090 moveproof-warehouse-sim` (build from the repo root: the image copies the engine from `backend/bench`) |
 | Local | `pip install -r sim/warehouse_sim/requirements.txt` then, from the repo root, `PYTHONPATH=backend uvicorn server:app --app-dir sim/warehouse_sim --port 8090` |
-| Fly.io | Runs beside the backend on `127.0.0.1:8090` via the `Procfile` |
+| Nebius VM | Service `sim` in `deploy/nebius/web/docker-compose.yml` |
 
 ## Configuration
 
@@ -45,8 +45,7 @@ The original mock simulator (`sim/mock_sim`) is kept for comparison under the Do
 |-------------|-------|
 | Local (same machine) | `http://localhost:8090` |
 | Docker Compose (dev) | `http://warehouse-sim:8090` |
-| Docker Compose (Vultr) | `http://sim:8090` |
-| Fly.io | `http://127.0.0.1:8090` |
+| Nebius VM (production compose) | `http://sim:8090` |
 
 ### Generate a token
 

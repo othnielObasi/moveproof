@@ -24,26 +24,15 @@ The warehouse simulator imports the benchmark engine, so changes to `backend/ben
 - **Lessons come only from gate records** and are scoped to the policy version they were learned under.
 - **Thresholds change only through proposals** (`policies/proposals.py`): replay, benchmark for relaxations, a second-person approval, activation between runs. Safety floors in code cannot be changed by a proposal.
 
-## CI / Provisioning Workflows
+## CI and Deployment
 
-Workflows live in `.github/workflows/`:
-
-| Workflow | Trigger | What it does |
-|---|---|---|
-| `ci.yml` | Push / PR to `main` | Backend tests, frontend build, Docker builds (backend, mock sim, warehouse sim) |
-| `deploy.yml` | Push to `main` | Fly.io backend + Vercel frontend |
-| `provision_vultr_env.yml` | Push to `main` | Checks `/etc/moveproof/.env` exists on the Vultr VM, then redeploys over SSH, runs the backend preflight and a health check |
-| `provision_vultr_api.yml` | Push to `main` / manual | Creates a Vultr instance via the API (needs `VULTR_API_KEY`) |
-| `deploy_vultr.yml` | Manual | Create a Vultr VM and deploy |
-
-Use the Actions UI to run a workflow when CLI dispatch returns HTTP 403.
-
-These workflows and `docker-compose.vultr.yml` currently pass only Gemini keys to the backend. Add `NEBIUS_API_KEY`, `LLM_ENABLED=true`, `LLM_PROVIDER=nemotron`, `TAVILY_API_KEY` and `RECEIPT_SIGNING_KEY` there to run Nemotron, live Tavily lookups and a stable signing key in production.
+`.github/workflows/ci.yml` runs on every push and pull request to `main`: backend tests, the frontend build, and Docker builds (backend, mock sim, warehouse sim). Deployment is manual, to Nebius AI Cloud; see [BUILD.md](BUILD.md#production--nebius-ai-cloud).
 
 ### Secrets and Runtime
 
-- Runtime secrets are written to `/etc/moveproof/.env` on the VM (owner `root:root`, mode `600`).
-- Never commit secrets. Use GitHub Secrets for provisioning and rotate keys after deployment.
+- Runtime secrets live in `.env` beside the compose file on the VM, readable only by the deploy user. `.env.example` lists the names; never put real values in it.
+- The benchmark's Token Factory key comes from a Nebius MysteryBox secret, never from the command line.
+- Never commit secrets, and rotate keys after the event.
 - Without `RECEIPT_SIGNING_KEY`, a development signing key is created in `data/`; receipts signed with it cannot be verified after the key is lost.
 
 ## Run Lifecycle

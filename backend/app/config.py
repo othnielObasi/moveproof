@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # CORS
     # ------------------------------------------------------------
     # Comma-separated origins, e.g.:
-    # "http://localhost:3000,https://gt-audio2texts.vercel.app"
+    # "http://localhost:3000,https://moveproof.example.com"
     cors_origins: str = "http://localhost:3000"
 
     # ------------------------------------------------------------

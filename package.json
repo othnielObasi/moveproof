@@ -1,27 +1,16 @@
 {
   "name": "moveproof",
   "version": "1.0.0",
-  "description": "> **Track 1: Autonomous Robotics Control in Simulation** >  > The governance layer for autonomous robot control. We're not building the robot brain — we're building the **robot conscience**.",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs",
-    "test": "tests"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "private": true,
+  "description": "Runtime governance for AI-planned robot moves: NVIDIA Nemotron proposes, a deterministic gate decides, every decision is signed. This root package only holds the Playwright browser smoke tests.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/othnielObasi/moveproof.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/othnielObasi/moveproof/issues"
+  "license": "MIT",
+  "scripts": {
+    "test:smoke": "node tests/warehouse-ui.smoke.cjs && node tests/warehouse-parity.smoke.cjs"
   },
-  "homepage": "https://github.com/othnielObasi/moveproof#readme",
   "devDependencies": {
     "playwright": "^1.41.0"
   }

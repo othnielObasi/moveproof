@@ -3,7 +3,7 @@ const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE || "";
 
 /**
  * WebSocket URL for a run's live feed. The frontend's own host cannot proxy
- * WebSockets on Vercel (or in `next dev`), so connect to the backend directly:
+ * WebSockets in `next dev`, so connect to the backend directly:
  * NEXT_PUBLIC_WS_BASE if set, else the absolute API base, else the backend on
  * :8080 when running locally, else same-origin (a reverse proxy in front).
  */

@@ -3,8 +3,8 @@
 > MoveProof — an autonomous robotics governance platform.
 
 This document covers every way to build, run, and deploy the project: local
-development, Docker Compose, Vultr production, and the Fly.io + Vercel
-alternative.
+development, Docker Compose, and production on Nebius AI Cloud (the live
+demo VM and the Serverless Jobs benchmark).
 
 ---
 
@@ -15,13 +15,12 @@ alternative.
 3. [Environment Variables](#environment-variables)
 4. [Local Development (Docker Compose)](#local-development-docker-compose)
 5. [Local Development (No Docker)](#local-development-no-docker)
-6. [Production — Vultr](#production--vultr)
-7. [Production — Fly.io + Vercel](#production--flyio--vercel)
-8. [Database & Migrations](#database--migrations)
-9. [Running Tests](#running-tests)
-10. [CI / CD Pipelines](#ci--cd-pipelines)
-11. [Monitoring](#monitoring)
-12. [Troubleshooting](#troubleshooting)
+6. [Production — Nebius AI Cloud](#production--nebius-ai-cloud)
+7. [Database & Migrations](#database--migrations)
+8. [Running Tests](#running-tests)
+9. [CI](#ci)
+10. [Monitoring](#monitoring)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -49,12 +48,12 @@ alternative.
 
 The original mock simulator (`sim/mock_sim/`) is kept for comparison under the Compose `legacy` profile.
 
-In production (Vultr), an **Nginx** reverse proxy sits in front of everything,
-terminates TLS, and routes traffic:
+In production (Nebius AI Cloud), a **Caddy** reverse proxy sits in front of
+everything, gets the TLS certificate automatically, and routes traffic:
 
-- `https://domain.com/` → frontend (`:3000`)
-- `https://domain.com/api/*` → backend (`:8080`, path prefix stripped)
-- `https://domain.com/health|docs|redoc|ws` → backend (direct)
+- `https://<site>/` → frontend (`:3000`)
+- `https://<site>/api/*` → backend (`:8080`, path prefix stripped)
+- `https://<site>/ws/*`, `/docs`, `/openapi.json`, `/health` → backend (direct)
 
 ---
 
@@ -87,7 +86,7 @@ cp .env.example .env
 | `DATABASE_URL`       | PostgreSQL connection string                   | `postgresql://moveproof:secret@db:5432/moveproof` |
 | `JWT_SECRET`         | Secret key for JWT token signing               | *(auto-generated in dev)*        |
 | `SIM_TOKEN`          | Shared auth token for simulator API            | *(empty in dev = no auth)*       |
-| `POSTGRES_PASSWORD`  | PostgreSQL password (Vultr compose)            | `openssl rand -hex 32`           |
+| `POSTGRES_PASSWORD`  | PostgreSQL password (production compose)       | `openssl rand -hex 32`           |
 | `RECEIPT_SIGNING_KEY`| Base64 Ed25519 private key for signed receipts | *(dev key created in `data/`)*   |
 
 ### AI and Site Intelligence
@@ -220,131 +219,38 @@ to `http://localhost:8080` automatically (see `next.config.js`).
 
 ---
 
-## Production — Vultr
+## Production — Nebius AI Cloud
 
-The primary production target. A single Vultr VM (recommended: **2 vCPU / 4 GB**)
-runs all services via `docker-compose.vultr.yml` behind Nginx.
+### Live demo VM
 
-### Automated Deployment (Recommended)
+The live demo runs on one Nebius AI Cloud VM (`cpu-d3`, 2 vCPU / 8 GB) with the
+stack in [`deploy/nebius/web/`](../deploy/nebius/web/):
 
-Every push to `main` triggers the **provision_vultr_env** GitHub Actions
-workflow, which SSHes into the VM and runs the deploy script.
+| Service    | Image / source                     | Notes |
+|------------|------------------------------------|-------|
+| `caddy`    | `caddy:2.8`                        | Automatic HTTPS for `SITE_ADDRESS`; routes as above |
+| `frontend` | `frontend/Dockerfile.prod`         | Built with `NEXT_PUBLIC_API_BASE=/api` |
+| `backend`  | `backend/Dockerfile`               | `PUBLIC_DEMO=true` guardrails: one run at a time, hourly budgets, auto-stop, read-only rule changes |
+| `sim`      | `sim/warehouse_sim/Dockerfile`     | Reached as `http://sim:8090` |
+| `db`       | `postgres:16`                      | Data in the `pg_data` volume |
 
-**Required GitHub Secrets:**
-
-| Secret            | Description                          |
-|-------------------|--------------------------------------|
-| `SSH_PRIVATE_KEY` | SSH key for VM access                |
-| `VM_IP`           | Vultr VM public IP                   |
-| `VM_USER`         | SSH user (typically `root`)          |
-| `GEMINI_API_KEY`  | Gemini API key                       |
-| `GEMINI_PROJECT_ID` | Gemini project ID                 |
-| `POSTGRES_PASSWORD`  | PostgreSQL password               |
-| `JWT_SECRET`      | JWT signing secret                   |
-| `SIM_TOKEN`       | Simulator auth token                 |
-
-> **Nemotron, Tavily and receipt signing in production:** `docker-compose.vultr.yml`
-> sets the backend's environment explicitly and currently passes only the Gemini
-> keys. To use Nemotron, live Tavily lookups and a stable signing key, add
-> `NEBIUS_API_KEY`, `LLM_ENABLED`, `LLM_PROVIDER`, `TAVILY_API_KEY` and
-> `RECEIPT_SIGNING_KEY` to the backend service there (and to `/etc/moveproof/.env`).
-> `deploy/vultr-deploy.sh` also still requires `GEMINI_API_KEY`.
-
-### Manual Deployment
-
-SSH into the VM and run the deploy script:
+`cloud-init.yaml.tpl` installs Docker on a new VM. Then:
 
 ```bash
-ssh root@<VM_IP>
-cd /opt/moveproof
-git pull origin main
-bash deploy/vultr-deploy.sh
+git clone https://github.com/othnielObasi/moveproof.git && cd moveproof
+# create .env with NEBIUS_API_KEY, TAVILY_API_KEY, RECEIPT_SIGNING_KEY,
+# JWT_SECRET, SIM_TOKEN, POSTGRES_PASSWORD and SITE_ADDRESS
+docker compose -f deploy/nebius/web/docker-compose.yml --env-file .env up -d --build
 ```
 
-The deploy script handles:
-1. Repository clone / update
-2. Environment file creation (`/etc/moveproof/.env`)
-3. Firewall configuration (ports 80, 443)
-4. Docker Compose build and launch
-5. Nginx reverse proxy configuration
-6. Let's Encrypt TLS certificate (Certbot)
-7. Daily PostgreSQL backup cron (7-day retention)
+To redeploy after a push: `git pull` and run the same command.
 
-### Production Container Resources
+### Benchmark on Serverless Jobs
 
-| Container  | CPU    | Memory | Notes                     |
-|------------|--------|--------|---------------------------|
-| frontend   | 0.5    | 512 MB | Next.js SSR               |
-| backend    | 1.0    | 1.5 GB | FastAPI + Alembic          |
-| db         | 1.0    | 1 GB   | PostgreSQL 16              |
-| sim        | 0.5    | 256 MB | Warehouse simulator        |
-| **Total**  | **3.0**| **3.25 GB** | Fits a 4 GB VM       |
-
-### Network Isolation
-
-```
-                     ┌─── frontend_net ───┐
-                     │                    │
-Internet → Nginx → Frontend           Backend → Simulator
-                                         │
-                     └─── backend_net ────┘
-                                         │
-                                      PostgreSQL
-```
-
-The frontend can only reach the backend. The database and simulator are on
-`backend_net` only — not directly accessible from the frontend container or
-the public internet.
-
----
-
-## Production — Fly.io + Vercel
-
-An alternative deployment that co-locates the backend and simulator in a
-single Fly.io machine and deploys the frontend to Vercel's edge network.
-
-### Backend (Fly.io)
-
-Uses `Dockerfile.fly` — a monolith image that runs both the API and simulator
-via [Honcho](https://github.com/nickstenning/honcho) (see `Procfile`).
-
-```bash
-# One-time setup
-fly launch --name moveproof --region lhr
-
-# Set secrets
-fly secrets set \
-  NEBIUS_API_KEY=... LLM_ENABLED=true LLM_PROVIDER=nemotron \
-  TAVILY_API_KEY=... \
-  RECEIPT_SIGNING_KEY=... \
-  DATABASE_URL=... \
-  JWT_SECRET=... \
-  SIM_TOKEN=...
-
-# Deploy
-fly deploy
-```
-
-### Frontend (Vercel)
-
-```bash
-npx vercel --prod
-```
-
-Configuration is in `vercel.json`. The build command runs `cd frontend && npm
-run build`, and `NEXT_PUBLIC_API_BASE` is set to the Fly.io URL, so all API
-calls from the browser go directly to Fly.
-
-### CI/CD
-
-The `deploy.yml` workflow deploys both on each push to `main`:
-- **Fly.io**: Uses `flyctl` via `FLY_API_TOKEN`
-- **Vercel**: Uses `amondnet/vercel-action` via `VERCEL_TOKEN`
-
-The workflow sets only the Gemini, database and JWT secrets, on an app named
-`moveproof-api`, while `vercel.json` points the frontend at
-`https://moveproof.fly.dev`. The repo has no `fly.toml`; `fly launch` creates one. Set the Nemotron, Tavily and
-signing secrets yourself with `fly secrets set`, and keep the app names consistent.
+The safety benchmark runs as a Nebius Serverless Job: it fetches an exact
+public commit, runs the seeded scenarios and returns a checksummed results
+archive. The Token Factory key reaches the job from a MysteryBox secret,
+never from the command line. See [`deploy/nebius/README.md`](../deploy/nebius/README.md).
 
 ---
 
@@ -385,13 +291,13 @@ alembic upgrade head
 
 ### Backing Up PostgreSQL (Production)
 
-The Vultr deploy script installs a daily cron job:
+To keep daily backups on the VM, add a cron job such as:
 
 ```
-0 3 * * * docker exec moveproof-db pg_dump -U moveproof moveproof | gzip > /opt/moveproof/backups/moveproof-$(date +\%Y\%m\%d).sql.gz
+0 3 * * * docker compose -f deploy/nebius/web/docker-compose.yml exec -T db pg_dump -U moveproof moveproof | gzip > /opt/moveproof/backups/moveproof-$(date +\%Y\%m\%d).sql.gz
 ```
 
-Backups are retained for 7 days.
+Prune old files to keep about a week of backups.
 
 ---
 
@@ -453,31 +359,16 @@ npm run build    # Type checks + production build
 
 ```bash
 docker compose build                          # dev images
-docker compose -f docker-compose.vultr.yml build  # prod images
+docker compose -f deploy/nebius/web/docker-compose.yml build  # production images
 ```
 
 ---
 
-## CI / CD Pipelines
+## CI
 
-All workflows live in `.github/workflows/`:
-
-| Workflow                    | Trigger            | What it does                           |
-|-----------------------------|--------------------|----------------------------------------|
-| `ci.yml`                    | Push / PR to main  | Backend tests, frontend build, Docker builds (backend, mock sim, warehouse sim) |
-| `deploy.yml`                | Push to main       | Deploy to Fly.io + Vercel              |
-| `provision_vultr_env.yml`   | Push to main       | SSH deploy to existing Vultr VM        |
-| `provision_vultr_api.yml`   | Push to main / manual | Create new Vultr VM via API         |
-| `deploy_vultr.yml`          | Manual dispatch    | Create Vultr VM + deploy               |
-
-### Typical Flow
-
-```
-git push origin main
-  ├── ci.yml        → runs tests, verifies builds
-  ├── deploy.yml    → deploys to Fly.io + Vercel
-  └── provision_vultr_env.yml → SSH into Vultr VM, pull + rebuild
-```
+`.github/workflows/ci.yml` runs on every push and pull request to `main`:
+backend tests, the frontend build, and Docker builds of the backend, mock
+simulator and warehouse simulator. Deployment is manual (see above).
 
 ---
 
@@ -522,7 +413,7 @@ The backend can't connect to the simulator on port 8090.
 - **Local**: Make sure the simulator is running — `docker compose up warehouse-sim`
 - **Docker**: Verify `SIM_BASE_URL` uses the container hostname, not `localhost`
   (`http://warehouse-sim:8090` in `docker-compose.yml`,
-  `http://sim:8090` in `docker-compose.vultr.yml`)
+  `http://sim:8090` in `deploy/nebius/web/docker-compose.yml`)
 
 ### Simulator exits with `No module named 'bench'`
 
@@ -562,8 +453,7 @@ alembic history        # view migration chain
 alembic upgrade head   # apply pending migrations
 ```
 
-### Out of memory on Vultr
+### Out of memory
 
-Container limits total 3.25 GB. Use a VM with at least 4 GB RAM:
-- Vultr plan: `vc2-2c-4gb`
-- Check usage: `docker stats --no-stream`
+The full stack (frontend, backend, simulator, PostgreSQL, Caddy) needs about
+4 GB. Check usage with `docker stats --no-stream`.

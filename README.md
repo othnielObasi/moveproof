@@ -595,7 +595,7 @@ moveproof/
 │   │   └── utils/                # SHA-256 hashing, Ed25519 signing, IDs, time
 │   ├── bench/                    # Safety benchmark: engine, scenarios, runner, results
 │   ├── alembic/                  # Database migrations
-│   └── tests/                    # pytest suite (221 tests)
+│   └── tests/                    # pytest suite (239 tests)
 │
 ├── frontend/                     # Operator Dashboard — Next.js 14, React 18, TS
 │   └── src/
@@ -611,54 +611,45 @@ moveproof/
 │   └── mock_sim/                 # Original mock simulator (Compose "legacy" profile)
 │
 ├── tests/                        # Browser smoke tests (Playwright) + live traffic tests
-├── docs/                         # Documentation
-├── deploy/                       # Vultr deployment script
-├── infra/                        # Grafana dashboard, OTEL config, Postgres init
+├── docs/                         # Documentation (docs/archive/ holds older material)
+├── deploy/nebius/                # Nebius AI Cloud: live demo VM stack + Serverless Jobs benchmark
+├── scripts/                      # Token Factory key and model check
+├── infra/                        # Grafana dashboard
 ├── docker-compose.yml            # Local development stack
-├── docker-compose.vultr.yml      # Production stack (Nginx, resource limits, healthchecks)
-├── Dockerfile.fly                # Combined backend + sim for Fly.io
-└── .github/workflows/            # CI (pytest + build) + deploy (Fly.io, Vercel, Vultr)
+└── .github/workflows/            # CI (backend tests + frontend build)
 ```
 
 ---
 
 ## Deployment
 
-### Docker Compose (local / self-hosted)
+### Local
 
 ```bash
-docker compose up -d                                    # development
-docker compose -f docker-compose.vultr.yml up --build -d  # production
+docker compose up -d
 ```
 
-The production compose file adds:
-- All ports bound to `127.0.0.1` (Nginx handles external traffic + SSL)
-- Healthchecks with `depends_on: condition: service_healthy`
-- Resource limits on every container
-- JSON file logging with rotation
-- Separate `frontend_net` / `backend_net` Docker networks
+### Nebius AI Cloud (the live demo)
 
-### Vultr VM
+The live demo runs on a Nebius AI Cloud VM: Caddy (automatic HTTPS), the frontend, the backend, the simulator and PostgreSQL 16 in one Docker Compose stack, with the public-demo guardrails on. Files and steps: [`deploy/nebius/web/`](deploy/nebius/web/) (`docker-compose.yml`, `Caddyfile`, `cloud-init.yaml.tpl`).
 
-Single-VM deployment with Nginx reverse proxy and Let's Encrypt SSL. See [`deploy/vultr-deploy.sh`](deploy/vultr-deploy.sh) for the provisioning script and [`docs/VULTR_CUSTOM_DOMAIN.md`](docs/VULTR_CUSTOM_DOMAIN.md) for the Nginx configuration guide.
+```bash
+# on the VM, after cloning the repo and creating .env with the keys
+docker compose -f deploy/nebius/web/docker-compose.yml --env-file .env up -d --build
+```
 
-### Fly.io + Vercel
+### Nebius Serverless Jobs (the benchmark)
 
-| Component | Platform | Guide |
-|-----------|----------|-------|
-| Backend + Simulator | Fly.io | [`docs/deploy-fly.md`](docs/deploy-fly.md) |
-| Frontend | Vercel | [`docs/deploy-vercel.md`](docs/deploy-vercel.md) |
+The safety benchmark runs as a Serverless Job that fetches an exact commit and returns a checksummed results archive; the Token Factory key comes from MysteryBox. See [`deploy/nebius/README.md`](deploy/nebius/README.md).
 
-> **Production keys:** `docker-compose.vultr.yml`, `deploy/vultr-deploy.sh` and the deploy workflows currently pass only the Gemini key to the backend. To run Nemotron, Tavily and a fixed receipt-signing key in production, add `NEBIUS_API_KEY`, `LLM_PROVIDER=nemotron`, `TAVILY_API_KEY` and `RECEIPT_SIGNING_KEY` to the backend's environment there.
-
-CI/CD is configured in `.github/workflows/` — push to `main` triggers backend tests, frontend build, and optional auto-deploy.
+CI in `.github/workflows/ci.yml` runs the backend tests and the frontend build on every push.
 
 ---
 
 ## Testing
 
 ```bash
-# Backend tests (221 tests); run from backend/ so the bench package imports
+# Backend tests (239 tests); run from backend/ so the bench package imports
 cd backend && python -m pytest tests/ -q
 
 # Live traffic tests for the warehouse simulator
@@ -700,7 +691,7 @@ The browser smoke tests use fixtures for every API and WebSocket call and fail o
 | **Site intelligence** | Tavily search, screened as untrusted input | — |
 | **Simulator** | FastAPI + the benchmark's deterministic engine (`backend/bench/world.py`) | — |
 | **Auth** | JWT (python-jose), bcrypt (passlib) | — |
-| **Infra** | Docker Compose, Nginx, Fly.io, Vercel, GitHub Actions | — |
+| **Infra** | Nebius AI Cloud (VM + Serverless Jobs + MysteryBox), Docker Compose, Caddy, GitHub Actions CI | — |
 | **Observability** | OpenTelemetry (config), Grafana dashboard | — |
 
 ---
@@ -709,28 +700,18 @@ The browser smoke tests use fixtures for every API and WebSocket call and fail o
 
 | Document | Description |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | Full system architecture, data models, and component diagrams |
+| [docs/architecture.md](docs/architecture.md) | System architecture, data models and component diagrams |
 | [docs/api.md](docs/api.md) | API reference with request/response examples |
-| [docs/DEVELOPER.md](docs/DEVELOPER.md) | Developer guide — local setup, CI, run lifecycle, governance engine internals |
-| [docs/GEMINI_INTEGRATION.md](docs/GEMINI_INTEGRATION.md) | Original Gemini planner integration (now the secondary provider) |
+| [docs/DEVELOPER.md](docs/DEVELOPER.md) | Developer guide: local setup, CI, run lifecycle, governance engine internals |
+| [docs/BUILD.md](docs/BUILD.md) | Build, run and deploy guide |
 | [docs/SIMULATOR_CONFIG.md](docs/SIMULATOR_CONFIG.md) | Warehouse simulator: connection (`SIM_BASE_URL`, `SIM_TOKEN`), scenarios, seeded replay |
-| [docs/BUILD.md](docs/BUILD.md) | Build, run and deploy guide (local, Docker, Vultr, Fly.io + Vercel) |
-| [docs/warehouse-view-parity.md](docs/warehouse-view-parity.md) | How the 3D view matches every floor-plan feature, and how to test it |
 | [backend/bench/README.md](backend/bench/README.md) | Safety benchmark method and commands |
-| [docs/demo-script.md](docs/demo-script.md) | 4-minute demo script |
-| [docs/demo-build-walkthrough.md](docs/demo-build-walkthrough.md) | Narration script for recording the build |
-| [docs/video-script.md](docs/video-script.md) | Shot-by-shot script for the 3-minute demo video |
-| [docs/devpost-draft.md](docs/devpost-draft.md) | Hackathon submission text |
 | [deploy/nebius/README.md](deploy/nebius/README.md) | Benchmark on Nebius Serverless Jobs |
-| [docs/whitepaper.md](docs/whitepaper.md) | Technical whitepaper — architecture, policy engine, chain-of-trust, compliance |
-| [docs/pitch.md](docs/pitch.md) | Product pitch summary |
-| [docs/one-pager.md](docs/one-pager.md) | One-page product overview for stakeholders |
-| [docs/pilot-use-cases.md](docs/pilot-use-cases.md) | Target deployment scenarios and use cases |
-| [docs/PRODUCTION_ROADMAP.md](docs/PRODUCTION_ROADMAP.md) | 6-phase roadmap from prototype to production |
-| [docs/GOVERNANCE_ROADMAP.md](docs/GOVERNANCE_ROADMAP.md) | Governance-bounded optimisation roadmap and implementation log |
 | [docs/JUDGE_CHECKLIST.md](docs/JUDGE_CHECKLIST.md) | Feature checklist for evaluation |
-| [docs/VULTR_CUSTOM_DOMAIN.md](docs/VULTR_CUSTOM_DOMAIN.md) | Vultr + Nginx + SSL deployment guide |
-| [docs/deploy-fly.md](docs/deploy-fly.md) · [docs/deploy-vercel.md](docs/deploy-vercel.md) | Fly.io backend and Vercel frontend |
+| [docs/demo-script.md](docs/demo-script.md) | Live demo script |
+| [docs/video-script.md](docs/video-script.md) | Script for the 3-minute demo video |
+| [docs/devpost-draft.md](docs/devpost-draft.md) | Hackathon submission text |
+| [docs/archive/](docs/archive/) | Older material from earlier stages (pitch, whitepaper, roadmaps, Gemini integration) |
 
 ---
 

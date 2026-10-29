@@ -36,3 +36,6 @@ userdata.sh
 
 # Receipt signing keys
 *.key
+
+# TypeScript build cache
+*.tsbuildinfo

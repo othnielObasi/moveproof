@@ -177,36 +177,28 @@ Each governance decision is also signed with Ed25519 (what was proposed, what th
 ## Deployment
 
 ```
-┌─────────────────────────────────────────┐
-│              Vultr VM                    │
-│                                         │
-│  ┌──────────┐  ┌─────────────────┐     │
-│  │  Nginx   │──│  Let's Encrypt  │     │
-│  │  :80/443 │  │  SSL certs      │     │
-│  └────┬─────┘  └─────────────────┘     │
-│       │                                 │
-│  ┌────▼─────────────────────────────┐  │
-│  │     Docker Compose               │  │
-│  │                                   │  │
-│  │  ┌──────────┐  ┌──────────────┐ │  │
-│  │  │ frontend │  │   backend    │ │  │
-│  │  │ :3000    │  │   :8080      │ │  │
-│  │  └──────────┘  └──────┬───────┘ │  │
-│  │                       │         │  │
-│  │  ┌──────────┐  ┌──────▼───────┐ │  │
-│  │  │   sim    │  │  PostgreSQL  │ │  │
-│  │  │ (ware-   │  │  :5432       │ │  │
-│  │  │ house)   │  │              │ │  │
-│  │  │ :8090    │  │              │ │  │
-│  │  └──────────┘  └──────────────┘ │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│        Nebius AI Cloud VM (cpu-d3)        │
+│                                          │
+│  ┌──────────────────────────────────┐    │
+│  │ Caddy :80/443 (automatic HTTPS)  │    │
+│  └────┬─────────────────────┬───────┘    │
+│       │ /                   │ /api /ws   │
+│  ┌────▼─────┐        ┌──────▼───────┐    │
+│  │ frontend │        │   backend    │    │
+│  │ :3000    │        │   :8080      │────┼──▶ Nebius Token Factory
+│  └──────────┘        └──┬────────┬──┘    │    (NVIDIA Nemotron)
+│                         │        │       │
+│               ┌─────────▼──┐ ┌───▼──────┐│
+│               │ sim :8090  │ │PostgreSQL││
+│               │ (warehouse)│ │  :5432   ││
+│               └────────────┘ └──────────┘│
+└──────────────────────────────────────────┘
+
+Benchmark: Nebius Serverless Jobs (key from MysteryBox) → results archive
 ```
 
-- Health checks on all services
-- Resource limits (CPU/memory per container)
-- Network isolation (frontend_net / backend_net)
-- Log rotation (json-file driver)
-- Auto-deploy on push to `main` via GitHub Actions
+- One Docker Compose stack: [`deploy/nebius/web/`](../deploy/nebius/web/)
+- Public-demo guardrails (`PUBLIC_DEMO=true`): one run at a time, hourly budgets, auto-stop, read-only rule changes
+- The safety benchmark runs separately on Serverless Jobs: [`deploy/nebius/README.md`](../deploy/nebius/README.md)
 
-Alternative: backend and simulator on one Fly.io machine (Honcho runs both from the `Procfile`), frontend on Vercel. See [BUILD.md](BUILD.md).
