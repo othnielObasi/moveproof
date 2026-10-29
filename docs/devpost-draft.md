@@ -9,7 +9,7 @@
 **Links**
 - Live demo: https://moveproof.213-239-186-67.sslip.io
 - Code (MIT): https://github.com/othnielObasi/moveproof
-- Video: *(YouTube link)*
+- Video: https://youtu.be/Mj60t_IRF_w
 
 ---
 

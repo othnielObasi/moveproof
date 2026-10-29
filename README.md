@@ -13,6 +13,8 @@
 
 Built for the **Nebius × NVIDIA Global AI Hackathon** (Physical AI track): NVIDIA Nemotron models served on **Nebius Token Factory**, running on **Nebius AI Cloud**.
 
+**Demo video (3 min):** https://youtu.be/Mj60t_IRF_w
+
 **Live demo:** https://moveproof.213-239-186-67.sslip.io: plan a mission, then press **Spill**, **Too Close** or **Forklift** and watch the gate respond. It's one shared simulated robot: one mission runs at a time (others can watch it), missions stop after 4 minutes, and safety settings are read-only on the public demo.
 
 ![A worker steps too close: the gate stops the robot (STOP · person 0.3 m), the plan passed the task check, and Nemotron was given lessons from earlier denials](docs/images/gate-stop.jpg)
