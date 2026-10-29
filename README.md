@@ -22,13 +22,17 @@ Built for the **Nebius × NVIDIA Global AI Hackathon** (Physical AI track): NVID
 
 ## The Problem
 
-Autonomous robots in warehouses, factories, and logistics have no compliance layer. When a robot makes a dangerous decision — moving too fast near a worker, breaching a geofence, operating with degraded sensors — there is no enforcement point. Logs record what happened *after* the incident. Monitoring dashboards watch; nothing *stops* the robot.
+**AI is starting to plan what robots do next.** Models like NVIDIA Nemotron can reason about a busy warehouse far better than hand-written rules. But a model can be brilliant and still wrong: it can propose a route through racking, a speed that's too fast near a person, or a plan that quietly heads somewhere other than the job it was given. It can even be steered by text it reads, such as a planted notice saying "speed limits are suspended". In a warehouse, a wrong move next to a person is an injury, not a typo.
 
-The **EU AI Act** (enforced 2026) classifies autonomous robotics as high-risk AI, mandating runtime risk management, human oversight, and tamper-evident audit trails. **ISO 42001** adoption is accelerating. Yet no existing product provides runtime governance — until now.
+Today's robot safety works at the last moment: scanners and emergency stops react when something is already close. Nothing checks the AI's plan **before** the robot acts on it, nothing keeps the plan on the task it was given, and nothing proves afterwards why each move was allowed. Logs record what happened; dashboards watch; neither stops a bad decision from being carried out.
+
+Regulators are asking for exactly that. The **EU AI Act** treats AI used as a safety component of machinery as high-risk, requiring risk management, human oversight and tamper-evident records, and standards such as **ISO/IEC 42001** ask for the same discipline.
+
+**The question MoveProof answers:** how do you get the intelligence of a frontier model in a physical robot without having to trust it?
 
 ## What MoveProof Does
 
-MoveProof is a **real-time governance layer** that interposes between the robot's AI planner and the physical actuators. Every proposed action is intercepted, evaluated against configurable safety policies in sub-100 ms, and either approved, modified, or blocked — *before* execution.
+MoveProof is a **real-time governance layer** between the robot's AI planner and its motors. The model only ever *proposes*. Every proposed move is checked against 11 deterministic safety policies in under 100 ms and approved, slowed or blocked *before* it runs; every plan is checked to stay on task; and every decision is signed so anyone can verify it later. The planner learns from the gate's denials, but nothing it learns can loosen a rule.
 
 ### Core Capabilities
 
