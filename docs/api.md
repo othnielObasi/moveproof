@@ -1,6 +1,6 @@
 # API Reference
 
-Base URL: `http://localhost:8080` (local) or `https://moveproof.nov-tia.com` (production). Through the frontend, the same API is served under `/api`.
+Base URL: `http://localhost:8080` (local) or `https://moveproof.213-239-186-67.sslip.io/api` (live demo). Through the frontend, the same API is served under `/api`.
 
 Interactive docs: `{base}/docs` (Swagger UI) or `{base}/redoc` (ReDoc). They list every endpoint; this page covers the main ones with examples.
 
