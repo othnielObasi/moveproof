@@ -1,7 +1,7 @@
 # MoveProof
 
 > **Every robot move, proven safe before it happens.**
-> An NVIDIA Nemotron planner proposes. A deterministic governance gate decides. Every decision leaves a signed, hash-chained receipt.
+> An NVIDIA Nemotron planner proposes. A deterministic governance gate decides. Every decision leaves a signed, hash-chained receipt. The planner learns from every denial, and every plan is checked to stay on task.
 
 Built for the **Nebius × NVIDIA Global AI Hackathon** (Physical AI track): NVIDIA Nemotron models served on **Nebius Token Factory**, running on **Nebius AI Cloud**.
 
@@ -38,6 +38,10 @@ MoveProof is a **real-time governance layer** that interposes between the robot'
 | **Regulatory compliance** | Framework-aligned reports for ISO 42001, EU AI Act, and NIST AI RMF with chain verification |
 | **Operator oversight** | HITL triggers when risk ≥ 0.75; approval/deny/override workflows with full audit trail |
 | **Tiered Nemotron planner** | Fast Nemotron models propose each step; Nemotron Ultra plans missions and replans after a denial; deterministic fallback; never unguarded execution |
+| **Adaptive learning** | The gate's denials become location-aware lessons that Nemotron gets before it plans; each plan records which lessons it used. With Nemotron, learning cut unsafe proposals by 37% (2.69 → 1.69 per 100 moves). Lessons change what the planner proposes, never what the gate allows. [How it works](#how-moveproof-learns) |
+| **Task-drift guard** | Every plan and replan must end at the mission's destination (from the mission record, never the model) and stay within 2× the aisle route; a drifting plan is replaced by the aisle route. Each check is a `TASK_CHECK` event. [How it works](#staying-on-task-task-drift-guard) |
+| **Governed rule changes** | Thresholds change only through a proposal: replay against past decisions, a second-person approval, versioned activation and rollback. [Details](#governed-rule-changes) |
+| **Site intelligence (Tavily)** | Hazard guidance from authoritative safety sources, treated as untrusted: firewall, two-source rule, zones can only tighten. [Details](#site-intelligence-with-tavily-untrusted-input) |
 | **Vision cross-check** | Nemotron 3.5 Super VL reads the robot camera every few seconds; its answer is checked against the sensors, misses are logged, and unconfirmed sightings can only slow the robot |
 | **Cost & latency per decision** | Every model call logged with tier, model, latency and tokens (`GET /llm/usage`) |
 | **Circuit breaker** | 3 consecutive governance denials auto-escalate to NEEDS_REVIEW for operator attention |
