@@ -1,5 +1,13 @@
 # MoveProof
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Next.js](https://img.shields.io/badge/next.js-14-black.svg)](https://nextjs.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111+-009688.svg)](https://fastapi.tiangolo.com)
+[![Pydantic](https://img.shields.io/badge/Pydantic-2.x-e92063.svg)](https://docs.pydantic.dev)
+[![NVIDIA Nemotron](https://img.shields.io/badge/NVIDIA-Nemotron-76b900.svg)](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/)
+[![Nebius Token Factory](https://img.shields.io/badge/Nebius-Token%20Factory-1f1f1f.svg)](https://nebius.com/services/token-factory)
+
 > **Every robot move, proven safe before it happens.**
 > An NVIDIA Nemotron planner proposes. A deterministic governance gate decides. Every decision leaves a signed, hash-chained receipt. The planner learns from every denial, and every plan is checked to stay on task.
 
@@ -9,14 +17,6 @@ Built for the **Nebius × NVIDIA Global AI Hackathon** (Physical AI track): NVID
 
 ![A worker steps too close: the gate stops the robot (STOP · person 0.3 m), the plan passed the task check, and Nemotron was given lessons from earlier denials](docs/images/gate-stop.jpg)
 <sub>Live run: a worker steps out 0.27 m from the robot and the gate stops it. Right: the plan passed the task-drift check, and the lessons Nemotron was given (and used) before planning.</sub>
-
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![Next.js](https://img.shields.io/badge/next.js-14-black.svg)](https://nextjs.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111+-009688.svg)](https://fastapi.tiangolo.com)
-[![Pydantic](https://img.shields.io/badge/Pydantic-2.x-e92063.svg)](https://docs.pydantic.dev)
-[![NVIDIA Nemotron](https://img.shields.io/badge/NVIDIA-Nemotron-76b900.svg)](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/)
-[![Nebius Token Factory](https://img.shields.io/badge/Nebius-Token%20Factory-1f1f1f.svg)](https://nebius.com/services/token-factory)
 
 ---
 
